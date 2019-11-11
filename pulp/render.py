@@ -23,7 +23,6 @@ class DirectoryRenderer(Renderer):
 
 class FileRenderer(Renderer):
     def render(self):
-        breakpoint()
         with open(self.root, "w", encoding="utf-8") as fp:
             for fn, data in self.items():
                 if not isinstance(data, list):
