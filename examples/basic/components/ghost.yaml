@@ -1,0 +1,9 @@
+kind: Component
+name: ghost
+image: ghost:1-alpine
+version: 1
+endpoints:
+    - name: db
+      interface: mysql:5.7
+    - name: http
+      interface: http

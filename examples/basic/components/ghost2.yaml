@@ -1,0 +1,4 @@
+kind: Component
+name: ghost
+image: ghost:2-alpine
+version: 2

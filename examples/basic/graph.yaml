@@ -1,0 +1,9 @@
+kind: Graph
+name: blog
+components:
+  - name: ghost
+    expose: ["http"]
+    replicas: 2
+  - name: mysql
+relations:
+  - ["mysql:db", "ghost:db"]
