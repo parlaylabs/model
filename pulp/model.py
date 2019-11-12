@@ -86,6 +86,6 @@ class Relation:
     @property
     def name(self):
         # join the endpoint names
-        return "<=>".join([ep.qual_name for ep in self.endpoints])
+        return "=".join([ep.qual_name for ep in self.endpoints])
 
     qual_name = name
