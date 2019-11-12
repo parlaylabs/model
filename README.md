@@ -11,8 +11,10 @@ Quickstart
 
 Model
 
+*these are WIP and don't reflect the current code, for example there isn't versioning and Environment isn't implement yet*
+
 ```
-kind: Model/v1
+kind: Graph/v1
 components:
     frontend:
         component: flubbber:1.2.3
@@ -57,7 +59,7 @@ Concepts
 
 **Endpoint** - An address, an interface and a version
 
-**Graph** - A set of interconnected Applications. Nodes in the graph are Applications and edges are Relations. A graph implements the same interface as Component externally using an optional system to promote endpoints to the Component which can be exposed or referenced in another graph. 
+**Graph** - A set of interconnected Applications. Nodes in the graph are Applications and edges are Relations. A graph implements the same interface as Application externally using an optional system to promote Endpoints of included Services which can be exposed or referenced in another graph. This will allow hiding of implementation details while still allowing reuse. 
 
 **Interface** - A high level defintion of a named protocol to expect. This is defined alongside a Endpoint and used to inform a Relation.
 
