@@ -1,9 +1,9 @@
-Pulp
+Model
 ====
 
-Pulp is a high level model specification language. It is designed to make expressing high level service graph ideas simple while still providing control at the lower levels. This is done using a series of templates and a phase of post template __Kustomize__ invocations as needed. 
+Model is a high level model specification language. It is designed to make expressing high level service graph ideas simple while still providing control at the lower levels. This is done using a series of templates and a phase of post template __Kustomize__ invocations as needed. 
 
-While pulp uses a YAML formatted document like much of the Kubernetes world it is designed to help minimize how much YAML a product author might have to write to include their container in the connected graph of runtime components.
+While Model uses a YAML formatted document like much of the Kubernetes world it is designed to help minimize how much YAML a product author might have to write to include their container in the connected graph of runtime components.
 
 
 Quickstart
@@ -77,7 +77,7 @@ Define components by adding component.yaml specs to git repos. Then register the
 Runtime Operations
 -------------------
 
-```pulp init```
+```model init```
 
 This will verify connectivity with the currently selected runtime and make any updates needed to begin operations.
 
@@ -85,14 +85,14 @@ This will verify connectivity with the currently selected runtime and make any u
 Component Authoring
 -------------------
 
-```pulp component init gh:ref```
+```model component init gh:ref```
 
 This will index the component.yaml and register it with the public metadata service. If you're using a custom component registry it can be provided here.  Updating a component that is referenced in a graph can in turn trigger a CI/CD workflow using a configured strategy. This means that a commit could force new deploys (for example if the component image version is :latest). However a graph object will typically reference static versions of components and must be updated manually or with the provided tooling.
 
 Graph Authoring
 ---------------
 
-```pulp graph init <repo>```
+```model graph init <repo>```
 
 Will create a binding between the gh repo and a named model
 
@@ -102,18 +102,18 @@ Graph Mutation
 
 Models live in their own repo. Adding components and connecting them can be done by manually editing model.yaml files, however
 
-```pulp graph plan [--stage]``` 
+```model graph plan [--stage]``` 
 
 will produce a plan and validate that the relations between components are satisfied.
 
 If versions of referenced components have changed you may update them by editing the model.yaml or by executing
 
-```pulp graph upgrade [--stage] [component[:version] ...]```
+```model graph upgrade [--stage] [component[:version] ...]```
 
 where omitting component will update all and omitting version will use the latest. 
 
 
-```pulp graph apply <stage>``` 
+```model graph apply <stage>``` 
 
 will apply any changes to the graph to the runtime. 
 

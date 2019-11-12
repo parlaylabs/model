@@ -11,7 +11,7 @@ from .. import schema
 from .. import store
 
 
-log = logging.getLogger("pulp")
+log = logging.getLogger(__package__)
 
 
 def add_options(options):

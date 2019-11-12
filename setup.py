@@ -22,12 +22,12 @@ install_requires = _pipfile()
 
 setup(
     packages=find_packages(exclude=["ez_setup", "tests"]),
-    package_data={"pulp": ["py.typed"]},
+    package_data={"model": ["py.typed"]},
     include_package_data=True,
     python_requires=">=3.7.0",
     keywords=[],
     zip_safe=False,
     install_requires=install_requires,
     long_description=long_description,
-    entry_points={"console_scripts": ["pulp = pulp.cli.main:main"]},
+    entry_points={"console_scripts": ["model = model.cli.main:main"]},
 )

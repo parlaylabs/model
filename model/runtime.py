@@ -28,7 +28,7 @@ class Kubernetes:
                 "replicas": 1,
                 "selector": {"matchLabels": {"app": service.name}},
                 "template": {
-                    "metadata": {"labels": {"app": service.name, "origin": "pulp"}},
+                    "metadata": {"labels": {"app": service.name, "origin": __package__}},
                     "spec": {
                         "containers": [
                             # XXX: join with context/runtime container registry

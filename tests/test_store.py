@@ -1,5 +1,5 @@
-import pulp.entity as E
-import pulp.store as S
+import model.entity as E
+import model.store as S
 
 import pytest
 
