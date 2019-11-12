@@ -11,7 +11,7 @@ class Renderer(dict):
 class DirectoryRenderer(Renderer):
     def render(self):
         if not self.root.exists():
-            self.root.makedir()
+            self.root.mkdir()
         for fn, data in self.items():
             ofn = self.root / fn
             with open(ofn, "w", encoding="utf-8") as fp:

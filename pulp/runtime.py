@@ -46,7 +46,7 @@ class Kubernetes:
                 },
             },
         }
-        output[f"service-{service.name}-deployment.yaml"] = deployment
+        output[f"{service.name}-deployment.yaml"] = deployment
         # next push out a service object
 
     def render_relation(self, relation, graph, output):
@@ -65,7 +65,7 @@ class RuntimeImpl:
 
     def render(self, graph, target=None):
         # XXX: obviously pass through config
-        outputs = render.FileRenderer("/tmp/manifest.yaml")
+        outputs = render.DirectoryRenderer("/tmp/manifest")
 
         # Run three phases populating data dicts into outputs
         # then run the renderer to create output data dicts
