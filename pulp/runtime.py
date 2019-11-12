@@ -18,11 +18,8 @@ class Kubernetes:
 
     def render_service(self, service, graph, output):
         # push out a deployment
-        ports = set()
-        for ep in service.endpoints:
-            ports |= set(ep.ports)
-        ports = list(ports)
-        ports.sort()
+        ports = service.ports
+        # XXX: ServiceAccountName
         deployment = {
             "apiVersion": "apps/v1",
             "kind": "Deployment",
