@@ -9,7 +9,7 @@ class Renderer(dict):
 
 
 class DirectoryRenderer(Renderer):
-    def render(self):
+    def write(self):
         if not self.root.exists():
             self.root.mkdir()
         for fn, data in self.items():
@@ -22,7 +22,7 @@ class DirectoryRenderer(Renderer):
 
 
 class FileRenderer(Renderer):
-    def render(self):
+    def write(self):
         with open(self.root, "w", encoding="utf-8") as fp:
             for fn, data in self.items():
                 if not isinstance(data, list):

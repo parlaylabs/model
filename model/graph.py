@@ -67,10 +67,10 @@ def plan(graph_entity, store, runtime=None):
             cname, _, epname = ep_spec.partition(":")
             c = store["kind"]["Component"]["name"][cname]
             c_eps = c.get("endpoints", [])
+            # XXX: cname and service name will not be the same in the future
             s = services[cname]
             ep = s.get_endpoint(name=epname)
             ifaces.add(ep.interface)
-            # XXX: cname and service name will not be the same in the future
             endpoints.append(ep)
         if len(ifaces) != 1:
             raise ValueError(
@@ -83,18 +83,18 @@ def plan(graph_entity, store, runtime=None):
     g = Graph(
         meta=graph_entity, nodes=list(services.values()), edges=list(relations.values())
     )
-    view(g)
+    # view(g)
     return g
 
 
-def apply(graph, store, runtime):
+def apply(graph, store, runtime, ren):
     # use the runtime(s) to create a rendering of base objects
     if not runtime:
         runtime = "kubernetes"
     runtime = runtime_impl.resolve(runtime)
 
-    output = runtime.render(graph)
-    output.render()
+    runtime.render(graph, ren)
+    ren.write()
 
 
 def view(g):

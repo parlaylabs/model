@@ -7,6 +7,7 @@ import click
 from .. import entity
 from .. import graph as graph_manager
 from .. import model
+from .. import render
 from .. import schema
 from .. import store
 
@@ -85,9 +86,10 @@ def graph(ctx, runtime, config_dir):
 
 
 @graph.command()
+@add_options(common_args)
 @add_options(graph_common)
 @click.pass_context
-def plan(ctx, runtime):
+def plan(ctx, **kwargs):
     runtime = ctx.obj.get("runtime")
     s = ctx.obj["store"]
     graphs = s["kind"].get("Graph")
@@ -102,8 +104,9 @@ def plan(ctx, runtime):
 
 @graph.command()
 @add_options(graph_common)
+@click.option("-o", "--output-dir", default="base")
 @click.pass_context
-def apply(ctx, runtime):
+def apply(ctx, runtime, output_dir):
     s = ctx.obj["store"]
     runtime = ctx.obj.get("runtime")
     graphs = s["kind"].get("Graph")
@@ -112,10 +115,11 @@ def apply(ctx, runtime):
     graphs = graphs["name"].values()
     # Apply should be graph at a time
     # or at least a single runtime
+
+    ren = render.DirectoryRenderer(output_dir)
     for graph in graphs:
         graph = graph_manager.plan(graph, s, runtime)
-        graph_manager.apply(graph, store, runtime)
-    pass
+        graph_manager.apply(graph, store, runtime, ren)
 
 
 if __name__ == "__main__":

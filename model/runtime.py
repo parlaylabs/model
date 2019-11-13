@@ -28,7 +28,9 @@ class Kubernetes:
                 "replicas": 1,
                 "selector": {"matchLabels": {"app": service.name}},
                 "template": {
-                    "metadata": {"labels": {"app": service.name, "origin": __package__}},
+                    "metadata": {
+                        "labels": {"app": service.name, "origin": __package__}
+                    },
                     "spec": {
                         "containers": [
                             # XXX: join with context/runtime container registry
@@ -107,10 +109,7 @@ class Kustomize:
 class RuntimeImpl:
     plugins: List[RuntimePlugin]
 
-    def render(self, graph, target=None):
-        # XXX: obviously pass through config
-        outputs = render.DirectoryRenderer("/tmp/manifest")
-
+    def render(self, graph, outputs):
         # Run three phases populating data dicts into outputs
         # then run the renderer to create output data dicts
         # NOTE: we use data dicts here rather than the python-kube API
