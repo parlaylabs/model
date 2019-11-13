@@ -5,6 +5,7 @@ Model is a high level model specification language. It is designed to make expre
 
 While Model uses a YAML formatted document like much of the Kubernetes world it is designed to help minimize how much YAML a product author might have to write to include their container in the connected graph of runtime components.
 
+*It's only a model*
 
 Quickstart
 ----------
