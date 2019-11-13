@@ -10,6 +10,7 @@ from . import utils
 class Graph:
     nodes: Dict[str, model.Service]
     edges: Dict[str, model.Relation]
+    meta: model.GraphObj
 
     @property
     def services(self):
@@ -79,9 +80,10 @@ def plan(graph_entity, store, runtime=None):
         relations[r.name] = r
         store.add(r)
 
-    # TODO: must feed graph_ent into the graph used here, we need it for config
-    g = Graph(nodes=list(services.values()), edges=list(relations.values()))
-    # view(g)
+    g = Graph(
+        meta=graph_entity, nodes=list(services.values()), edges=list(relations.values())
+    )
+    view(g)
     return g
 
 
@@ -101,10 +103,16 @@ def view(g):
     import webbrowser
 
     gv = graphviz.Graph(format="svg")
-    for rel in g.relations:
-        gv.edge(
-            *[ep.qual_name for ep in rel.endpoints], label=rel.endpoints[0].interface
-        )
+    with gv.subgraph(name=g.meta.name, comment=g.meta.name) as cluster:
+        for rel in g.relations:
+            cluster.edge(
+                *[ep.qual_name for ep in rel.endpoints],
+                label=rel.endpoints[0].interface,
+            )
+
+        # There might be unconnected services (which is broken but we want to show here)
+        # for service in g.services:
+        #    cluster.node(service.name)
     # gv.view()
     fn = gv.render()
     fn = f"file://{Path.cwd()}/{fn}"
