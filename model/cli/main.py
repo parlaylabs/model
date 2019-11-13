@@ -10,8 +10,8 @@ from .. import model
 from .. import schema
 from .. import store
 
-
-log = logging.getLogger(__package__)
+cmd_name = __package__.split(".")[0]
+log = logging.getLogger(cmd_name)
 
 
 def add_options(options):
@@ -54,7 +54,7 @@ def main(ctx, log_level):
 @main.command()
 @click.pass_context
 def init(ctx):
-    print("Init Pulp")
+    print(f"Init {cmd_name}")
 
 
 @main.group()
