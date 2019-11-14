@@ -49,7 +49,7 @@ class Entity:
     def from_schema(cls, data, schema, src_ref=None):
         """populate instance from schema defaults (or None)"""
         if schema:
-            defaults = cls.schema_defaults(schema)
+            defaults = schema.schema_defaults(schema)
             utils.deepmerge(defaults, data)
         else:
             defaults = data

@@ -21,8 +21,7 @@ class Schema(dict):
     def getProperty(self, name):
         return self["properties"].get(name)
 
-    @classmethod
-    def schema_defaults(cls, schema):
+    def schema_defaults(self, schema):
         output = {}
 
         def _build(s, result):
