@@ -104,7 +104,7 @@ def plan(ctx, **kwargs):
 
 @graph.command()
 @add_options(graph_common)
-@click.option("-o", "--output-dir", default="base")
+@click.option("-o", "--output-dir", default="-")
 @click.pass_context
 def apply(ctx, runtime, output_dir):
     s = ctx.obj["store"]
@@ -116,7 +116,10 @@ def apply(ctx, runtime, output_dir):
     # Apply should be graph at a time
     # or at least a single runtime
 
-    ren = render.DirectoryRenderer(output_dir)
+    if output_dir == "-":
+        ren = render.FileRenderer(output_dir)
+    else:
+        ren = render.DirectoryRenderer(output_dir)
     for graph in graphs:
         graph = graph_manager.plan(graph, s, runtime)
         graph_manager.apply(graph, store, runtime, ren)
