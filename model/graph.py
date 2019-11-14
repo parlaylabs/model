@@ -10,7 +10,7 @@ from . import utils
 class Graph:
     nodes: Dict[str, model.Service]
     edges: Dict[str, model.Relation]
-    meta: model.GraphObj
+    model: model.GraphObj
 
     @property
     def services(self):
@@ -81,7 +81,9 @@ def plan(graph_entity, store, runtime=None):
         store.add(r)
 
     g = Graph(
-        meta=graph_entity, nodes=list(services.values()), edges=list(relations.values())
+        model=graph_entity,
+        nodes=list(services.values()),
+        edges=list(relations.values()),
     )
     # view(g)
     return g
@@ -103,7 +105,7 @@ def view(g):
     import webbrowser
 
     gv = graphviz.Graph(format="svg")
-    with gv.subgraph(name=g.meta.name, comment=g.meta.name) as cluster:
+    with gv.subgraph(name=g.model.name, comment=g.model.name) as cluster:
         for rel in g.relations:
             cluster.edge(
                 *[ep.qual_name for ep in rel.endpoints],

@@ -22,6 +22,11 @@ class Runtime(GraphObj):
 
 
 @dataclass
+class Environment(GraphObj):
+    kind: str = field(init=False, default="Environment")
+
+
+@dataclass
 class Service(GraphObj):
     kind: str = field(init=False, default="Service")
     component: entity.Entity

@@ -21,31 +21,6 @@ class Schema(dict):
     def getProperty(self, name):
         return self["properties"].get(name)
 
-    def _filterProperties(self, **kwargs):
-        schema = self.copy()
-        props = schema["properties"].copy()
-
-        for prop, spec in self["properties"].items():
-            removed = False
-            for name, requires in kwargs.items():
-                value = spec.get(name, _marker)
-                if value is not _marker:
-                    if isinstance(requires, (list, tuple)):
-                        if value not in requires:
-                            removed = True
-                            break
-                    elif value != requires:
-                        removed = True
-                        break
-            if removed:
-                props.pop(prop)
-                continue
-        schema["properties"] = props
-        return self.__class__(schema)
-
-    def get_layers(self, *layers):
-        return self._filterProperties(layer=layers)
-
     @classmethod
     def schema_defaults(cls, schema):
         output = {}
