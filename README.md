@@ -1,7 +1,7 @@
 Model
 ====
 
-Model is a high level model specification language. It is designed to make expressing high level service graph ideas simple while still providing control at the lower levels. This is done using a series of templates and a phase of post template __Kustomize__ invocations as needed. 
+Model is a high level model specification language. It is designed to make expressing high level service graph ideas simple while still providing control at the lower levels. This is done using a series of templates and a phase of post template __Kustomize__ invocations as needed. The model (which is internally a graph) can then be transformed for use on a runtime. For example, we can translate this model to run directly on Kubernetes. As best-practice evolves we can change then mappings between the model and the runtime to update an entire fleet at scale. 
 
 While Model uses a YAML formatted document like much of the Kubernetes world it is designed to help minimize how much YAML a product author might have to write to include their container in the connected graph of runtime components.
 
