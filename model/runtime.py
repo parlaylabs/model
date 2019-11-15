@@ -34,13 +34,22 @@ class Kubernetes:
                     "spec": {
                         "containers": [
                             # XXX: join with context/runtime container registry
+                            # XXX: model and support cross cutting concerns here
                             {
                                 "name": service.name,
                                 "image": service.component.get("image"),
                                 "imagePullPolicy": "IfNotPresent",
                                 "ports": ports,
+                            },
+                        ],
+                        # see https://kubernetes.io/docs/concepts/workloads/pods/pod-topology-spread-constraints/#spread-constraints-for-pods
+                        "topologySpreadConstraints": [
+                            {
+                                "topologyKey": service.name,
+                                "whenUnsatisfiable": "ScheduleAnyway",
+                                "labelSelector": {"name": service.name},
                             }
-                        ]
+                        ],
                     },
                 },
             },
