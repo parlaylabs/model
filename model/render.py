@@ -2,9 +2,13 @@ import io
 import sys
 
 from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Dict
 
 import yaml
+
+from . import utils
 
 
 @contextmanager
@@ -23,18 +27,37 @@ def streamer(fn_or_fp):
         fp.close()
 
 
-class Renderer(dict):
+@dataclass
+class Output:
+    name: str
+    data: Dict[str, Any]
+    annotations: Dict[str, Any]
+
+
+class Renderer(list):
     def __init__(self, root=None):
         self.root = Path(root)
+        self.index = {}  # name -> ent
+
+    def add(self, name, data, plugin, **kwargs):
+        annotations = kwargs
+        annotations["plugin"] = plugin
+        ent = Output(name, data, annotations)
+        self.append(ent)
+        self.index[ent.name] = ent
+
+    def __contains__(self, key):
+        return key in self.index
 
 
 class DirectoryRenderer(Renderer):
     def write(self):
         if not self.root.exists():
             self.root.mkdir()
-        for fn, data in self.items():
-            ofn = self.root / fn
+        for ent in self:
+            ofn = self.root / ent.name
             with open(ofn, "w", encoding="utf-8") as fp:
+                data = ent.data
                 if not isinstance(data, list):
                     data = [data]
                 print("---", file=fp)
@@ -44,8 +67,9 @@ class DirectoryRenderer(Renderer):
 class FileRenderer(Renderer):
     def write(self):
         with streamer(self.root) as fp:
-            for fn, data in self.items():
-                if not isinstance(data, list):
+            for ent in self:
+                data = ent.data
+                if not isinstance(ent, list):
                     data = [data]
                 print("---", file=fp)
                 yaml.safe_dump_all(data, stream=fp)

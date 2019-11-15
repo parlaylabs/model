@@ -45,8 +45,27 @@ class Kubernetes:
                 },
             },
         }
-        output[f"{service.name}-deployment.yaml"] = deployment
+        output.add(f"{service.name}-deployment.yaml", deployment, self)
+
         # next push out a service object
+        ports = []
+        for p in service.ports:
+            # XXX: static protocol, pull from endpoint
+            # XXX: use named targetPort from pod definition
+            ports.append({"protocol": "TCP", "port": int(p)})
+        serviceSpec = {
+            "apiVersion": "v1",
+            "kind": "Service",
+            "metadata": {"name": service.name},
+            "spec": {
+                "selector": {"app": service.name},
+                "ports": ports,
+                # XXX: specify elb/nlb annotations when environment is AWS
+                # see https://kubernetes.io/docs/concepts/services-networking/service/#connection-draining-on-aws
+                # https://kubernetes.io/docs/concepts/services-networking/service/#aws-nlb-support
+            },
+        }
+        output.add(f"{service.name}-service.yaml", serviceSpec, self)
 
     def render_relation(self, relation, graph, output):
         # For now emit a network policy object
@@ -77,18 +96,22 @@ class Kubernetes:
                 "egress": [],
             },
         }
-        output[f"{relation.name}-net-policy.yaml"] = net_policy
+        output.add(f"{relation.name}-net-policy.yaml", net_policy, self)
 
         default_policy_key = f"default-net-policy.yaml"
         if default_policy_key not in output:
             # Disable ingress by default, we want to own the network with the graph
             # to avoid whole suites of other possible issues
-            output[default_policy_key] = {
-                "apiVersion": "networking.k8s.io/v1",
-                "kind": "NetworkPolicy",
-                "metadata": {"name": "default-deny"},
-                "spec": {"podSelector": {}, "policyTypes": ["Ingress"]},
-            }
+            output.add(
+                default_policy_key,
+                {
+                    "apiVersion": "networking.k8s.io/v1",
+                    "kind": "NetworkPolicy",
+                    "metadata": {"name": "default-deny"},
+                    "spec": {"podSelector": {}, "policyTypes": ["Ingress"]},
+                },
+                self,
+            )
 
 
 @dataclass
@@ -102,7 +125,7 @@ class Kustomize:
 
     def fini(self, graph, output):
         # Render a kustomize resource file into what we presume to be a base dir
-        output["kustomization.yaml"] = {"resources": list(output.keys())}
+        output.add("kustomization.yaml", {"resources": list(output.index.keys())}, self)
 
 
 @dataclass
