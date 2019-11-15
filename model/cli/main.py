@@ -32,7 +32,7 @@ def load_config(store, config_dir):
     p = Path(config_dir)
     if not p.exists() or not p.is_dir():
         raise OSError("""No config directory -- post alpha this won't be required""")
-    for yml in p.rglob("*.yaml"):
+    for yml in sorted(p.rglob("*.yaml")):
         log.debug(f"Loading config from {yml}")
         schema.load_and_store(yml, store)
     # Validate after all loading is done
@@ -120,6 +120,7 @@ def apply(ctx, runtime, output_dir):
         ren = render.FileRenderer(output_dir)
     else:
         ren = render.DirectoryRenderer(output_dir)
+
     for graph in graphs:
         graph = graph_manager.plan(graph, s, runtime)
         graph_manager.apply(graph, store, runtime, ren)

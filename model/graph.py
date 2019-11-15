@@ -11,6 +11,7 @@ class Graph:
     nodes: Dict[str, model.Service]
     edges: Dict[str, model.Relation]
     model: model.GraphObj
+    runtime: runtime_impl
 
     @property
     def services(self):
@@ -84,6 +85,7 @@ def plan(graph_entity, store, runtime=None):
         model=graph_entity,
         nodes=list(services.values()),
         edges=list(relations.values()),
+        runtime=runtime,
     )
     # view(g)
     return g
