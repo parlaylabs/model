@@ -100,10 +100,15 @@ def pick(lst, default=None, **kwargs):
 def _dumper(obj):
     m = getattr(obj, "serialized", None)
     if m:
-        return m()
+        if callable(m):
+            return m()
+        else:
+            return m
     else:
         return obj
 
 
 def dump(obj):
+    """Dump objects as JSON. If objects have a serialized method or property it
+    will be used in the resulting output"""
     return json.dumps(obj, default=_dumper, indent=2)

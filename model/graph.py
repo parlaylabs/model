@@ -33,10 +33,6 @@ def plan(graph_entity, store, runtime=None):
     relations = {}
     components = {}
 
-    if not runtime:
-        runtime = "kubernetes"
-    runtime = runtime_impl.resolve(runtime)
-
     for comp_spec in graph_entity.get("components", []):
         # ensure we have a component defintion for each entry
         name = comp_spec.get("name")
@@ -51,7 +47,13 @@ def plan(graph_entity, store, runtime=None):
                 if not utils.pick(c_eps, name=ep):
                     raise ValueError(f"Unable to expose unknown endpoint {ep}")
 
-        s = model.Service(component=comp, name=name, runtime=runtime)
+        s = model.Service(
+            component=comp,
+            name=name,
+            runtime=runtime,
+            config=comp_spec.get("config", {}),
+        )
+
         for ep in c_eps:
             s.add_endpoint(name=ep["name"], interface=ep["interface"])
         components[name] = comp
@@ -92,11 +94,6 @@ def plan(graph_entity, store, runtime=None):
 
 
 def apply(graph, store, runtime, ren):
-    # use the runtime(s) to create a rendering of base objects
-    if not runtime:
-        runtime = "kubernetes"
-    runtime = runtime_impl.resolve(runtime)
-
     runtime.render(graph, ren)
     ren.write()
 

@@ -6,12 +6,21 @@ import yaml
 
 from . import render
 
+_plugins = {}
+_runtimes = {}
+
+
+def register(cls):
+    _plugins[cls.__name__.lower()] = cls
+    return cls
+
 
 @dataclass
 class RuntimePlugin:
     name: str
 
 
+@register
 @dataclass
 class Kubernetes:
     name: str = field(init=False, default="Kubernetes")
@@ -123,11 +132,13 @@ class Kubernetes:
             )
 
 
+@register
 @dataclass
 class Istio:
     name: str = field(init=False, default="Istio")
 
 
+@register
 @dataclass
 class Kustomize:
     name: str = field(init=False, default="Kustomize")
@@ -179,6 +190,21 @@ class RuntimeImpl:
 KubernetesImpl = RuntimeImpl(plugins=[Kubernetes(), Istio(), Kustomize()])
 
 
-def resolve(runtime_name):
-    # XXX: static singleton for now
-    return KubernetesImpl
+def resolve(runtime_name, store):
+    global _runtimes
+    # Look for a runtime entry in the store
+    if runtime_name in _runtimes:
+        return _runtimes[runtime_name]
+
+    rspec = store["kind"]["Runtime"]["name"][runtime_name]
+    plugins = resolve_each(rspec.plugins)
+    runtime = RuntimeImpl(plugins=plugins)
+    _runtimes[runtime_name] = runtime
+    return runtime
+
+
+def resolve_each(plugins):
+    impls = []
+    for p in plugins:
+        impls.append(_plugins[p.lower()]())
+    return impls

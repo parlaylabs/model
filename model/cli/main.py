@@ -8,6 +8,7 @@ from .. import entity
 from .. import graph as graph_manager
 from .. import model
 from .. import render
+from .. import runtime as runtime_impl
 from .. import schema
 from .. import store
 
@@ -82,7 +83,7 @@ graph_common = [click.option("-r", "--runtime", default="kubernetes")]
 def graph(ctx, runtime, config_dir):
     s = ctx.obj["store"]
     load_config(s, config_dir)
-    ctx.obj["runtime"] = model.Runtime(name=runtime)
+    ctx.obj["runtime"] = runtime_impl.resolve(runtime, s)
 
 
 @graph.command()

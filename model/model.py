@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Dict, List
+from typing import Any, Dict, List
 
 from . import entity
 from . import utils
@@ -33,6 +33,8 @@ class Service(GraphObj):
     endpoints: List["Endpoint"] = field(init=False, default_factory=list)
     relations: List = field(init=False, default_factory=list)
     runtime: Runtime
+    # TODO: this can be in init and draw config from the graph
+    config: Dict[str, Any] = field(default_factory=dict)
 
     def add_endpoint(self, name, interface):
         addresses = []

@@ -1,0 +1,6 @@
+kind: Runtime
+name: kubernetes
+plugins:
+    - Kubernetes
+    - Istio
+    - Kustomize
