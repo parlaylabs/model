@@ -185,11 +185,6 @@ class RuntimeImpl:
         return outputs
 
 
-# XXX: this will have to become more flexible or fixed,
-# this middle ground buys us little
-KubernetesImpl = RuntimeImpl(plugins=[Kubernetes(), Istio(), Kustomize()])
-
-
 def resolve(runtime_name, store):
     global _runtimes
     # Look for a runtime entry in the store
