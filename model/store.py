@@ -32,7 +32,10 @@ class AttributeIndexer(Indexer):
     def __init__(self, indexes):
         self.indexes = indexes
         self.__indexes = {}
-        self._setup()
+        for i in self.indexes:
+            if not isinstance(i, list):
+                i = [i]
+            self.__indexes.setdefault(i[0], {})
 
     def __repr__(self):
         return "<AttributeIndexer {}>".format(self.indexes)
@@ -41,52 +44,30 @@ class AttributeIndexer(Indexer):
         try:
             return self.__indexes[indexName]
         except KeyError:
-            return AttributeError(indexName)
-
-    def _setup(self):
-        for index in self.indexes:
-            if not isinstance(index, str):
-                index = index["Name"]
-            self.__indexes[index] = {}
+            raise AttributeError(indexName)
 
     def __call__(self, entity):
-        result = {}
         for index in self.indexes:
-            multi = False
-            if not isinstance(index, str):
-                multi = index.get("multi", False)
-                index = index["Name"]
-            mapping = self.__indexes.setdefault(index, {})
-            idx = _marker
-            get = getattr(entity, "get", _marker)
-            if get is not _marker:
-                idx = get(index, _marker)
-            if idx is _marker:
-                # see if it is an attr
-                idx = getattr(entity, index)
-            if idx:
-                if multi is True:
-                    mapping.setdefault(idx, set()).add(entity)
-                elif callable(multi):
-                    shallowmerge(mapping.setdefault(idx, {}), multi(entity))
-                else:
-                    mapping[idx] = entity
-            result.setdefault(index, {}).update(mapping)
+            mapping = self.__indexes
+            v = _marker
+            if isinstance(index, str):
+                index = [index]
+            if not isinstance(index, list):
+                raise ValueError(f"unexpected index type {index}")
 
-        # return the delta of ids from the old index to the new,
-        # this only works from the top level index currently
-        # (though could return a path in the future)
-        self.__indexes = result
-        return result
+            if len(index) > 1:
+                for k in index:
+                    v = getattr(entity, k)
+                    mapping = mapping.setdefault(k, {})
+                    mapping = mapping.setdefault(v, {})
+            # for the last item in the index list we populate entity
+            k = index[-1]
+            v = getattr(entity, k)
+            mapping = mapping.setdefault(k, {})
+            mapping[v] = entity
 
 
-EntityIndexer = AttributeIndexer(
-    [
-        "qual_name",
-        dict(Name="kind", multi=AttributeIndexer(["name"])),
-        dict(Name="name", multi=AttributeIndexer(["kind"])),
-    ]
-)
+EntityIndexer = AttributeIndexer(["qual_name", ["kind", "name"], ["name", "kind"]])
 
 
 class Store:
