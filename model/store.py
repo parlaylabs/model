@@ -56,7 +56,7 @@ class AttributeIndexer(Indexer):
                 raise ValueError(f"unexpected index type {index}")
 
             if len(index) > 1:
-                for k in index:
+                for k in index[:-1]:
                     v = getattr(entity, k)
                     mapping = mapping.setdefault(k, {})
                     mapping = mapping.setdefault(v, {})
