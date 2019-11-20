@@ -10,6 +10,7 @@ from .. import model
 from .. import render
 from .. import runtime as runtime_impl
 from .. import schema
+from .. import server
 from .. import store
 
 cmd_name = __package__.split(".")[0]
@@ -125,6 +126,23 @@ def apply(ctx, runtime, output_dir):
     for graph in graphs:
         graph = graph_manager.plan(graph, s, runtime)
         graph_manager.apply(graph, store, runtime, ren)
+
+
+@graph.command()
+@click.pass_context
+def develop(ctx):
+    # launch a development server for testing
+    s = ctx.obj["store"]
+    runtime = ctx.obj.get("runtime")
+    graphs = s["kind"].get("Graph")
+    if not graphs:
+        raise KeyError("No graphs to serve in config")
+    graph_ents = graphs["name"].values()
+    graphs = []
+    for graph in graph_ents:
+        graphs.append(graph_manager.plan(graph, s, runtime))
+    srv = server.Server(graphs)
+    srv.serve_forever()
 
 
 if __name__ == "__main__":

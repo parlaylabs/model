@@ -1,9 +1,13 @@
+import logging
+
 from dataclasses import dataclass
 from typing import Any, Dict
 
 from . import model
 from . import runtime as runtime_impl
 from . import utils
+
+log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -20,6 +24,9 @@ class Graph:
     @property
     def relations(self):
         return self.edges
+
+    def serialized(self):
+        return dict(nodes=self.nodes, links=self.edges)
 
     def __post_init__(self):
         # Inject the graph objects belong to so they can resolve other objects
@@ -73,6 +80,7 @@ def plan(graph_entity, store, runtime=None):
             # XXX: cname and service name will not be the same in the future
             s = services[cname]
             ep = s.get_endpoint(name=epname)
+            log.debug(f"planning {ep_spec} {epname}")
             ifaces.add(ep.interface)
             endpoints.append(ep)
         if len(ifaces) != 1:

@@ -191,7 +191,7 @@ def resolve(runtime_name, store):
     if runtime_name in _runtimes:
         return _runtimes[runtime_name]
 
-    rspec = store["kind"]["Runtime"]["name"][runtime_name]
+    rspec = store.qual_name[f"Runtime:{runtime_name}"]
     plugins = resolve_each(rspec.plugins)
     runtime = RuntimeImpl(plugins=plugins)
     _runtimes[runtime_name] = runtime

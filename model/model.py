@@ -20,10 +20,8 @@ class GraphObj:
 class Runtime(GraphObj):
     kind: str = field(init=False, default="Runtime")
 
-
-@dataclass
-class Environment(GraphObj):
-    kind: str = field(init=False, default="Environment")
+    def serialized(self):
+        return dict(name=self.name, kind=self.kind)
 
 
 @dataclass
@@ -60,6 +58,11 @@ class Service(GraphObj):
         ports.sort()
         return ports
 
+    def serialized(self):
+        return dict(
+            name=self.name, kind=self.kind, endpoints=self.endpoints, config=self.config
+        )
+
 
 @dataclass
 class Endpoint:
@@ -84,6 +87,15 @@ class Endpoint:
         ports.sort()
         return ports
 
+    def serialized(self):
+        return dict(
+            name=self.name,
+            kind=self.kind,
+            service=self.service.name,
+            interface=self.interface,
+            addresses=self.addresses,
+        )
+
 
 @dataclass
 class Relation:
@@ -96,3 +108,6 @@ class Relation:
         return "=".join([ep.qual_name for ep in self.endpoints])
 
     qual_name = name
+
+    def serialized(self):
+        return dict(kind=self.kind, name=self.name, endpoints=self.endpoints)
