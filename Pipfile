@@ -12,6 +12,7 @@ pyyaml = "*"
 jsonschema = "*"
 click = "*"
 graphviz = "*"
+aiohttp = "*"
 
 [requires]
 python_version = "3.7"
