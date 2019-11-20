@@ -16,9 +16,8 @@ $ cd model
 $ pipenv install
 $ pipenv shell
 
-# To view the model
+# To view the model which will run a server and view http://localhost:8080/
 >$ model graph -c examples/basic/ develop
->$ xdg-open http://localhost:8080
 
 # To render the model 
 >$ model appy -c examples/basic apply -o base

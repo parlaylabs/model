@@ -40,8 +40,15 @@ class Server:
 
     def serve_forever(self):
         app = web.Application()
+        app.on_startup.append(open_viewer)
         app.add_routes(
             [web.get("/", self.index), web.get("/ws", self.handle),]
         )
         web.run_app(app)
 
+
+async def open_viewer(app):
+    async def view():
+        webbrowser.open_new_tab("http://localhost:8080/")
+
+    asyncio.create_task(view())
