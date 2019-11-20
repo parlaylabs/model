@@ -1,0 +1,52 @@
+<head>
+  <style>
+    body {
+      margin: 0;
+    }
+  </style>
+
+  <script crossorigin src="https://unpkg.com/react@16/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@16/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/babel-standalone"></script>
+  <script src="https://unpkg.com/react-force-graph-3d"></script>
+</head>
+
+<body>
+  <div id="graph"></div>
+
+  <script type="text/jsx">
+    const { useState } = React;
+    const ws = new WebSocket("ws://127.0.0.1:8080/ws");
+    // XXX: doing the ws onmessage in the widget is crazy bad design ;)
+    const DynamicGraph = () => {
+      const [data, setData] = useState({ws: ws,  nodes: [], links: [] });
+      ws.onmessage = (event) => {
+            var obj = JSON.parse(event.data);
+            obj.nodes.forEach(o => {
+                o.id = o.name;
+                o.status = "running";
+            });
+            obj.links.forEach(o => {
+                o.source = o.endpoints[0].service;
+                o.target = o.endpoints[1].service;
+            }); 
+            setData(obj);
+        };
+
+     return <ForceGraph3D
+        ws={ws}
+        nodeLabel="name"
+        linkLabel="name"
+        linkCurvature={0.25}
+        nodeAutoColorBy="status"
+        enableNodeDrag={true}
+        graphData={data}
+      />;
+    };
+
+    ReactDOM.render(
+      <DynamicGraph />,
+      document.getElementById('graph')
+    );
+  </script>
+</body>

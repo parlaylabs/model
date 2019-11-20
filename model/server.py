@@ -15,6 +15,9 @@ class Server:
         for graph in self.graphs:
             await ws.send_str(utils.dump(graph))
 
+    async def index(self, request):
+        return web.FileResponse("assets/html/index.html")
+
     async def handle(self, request):
         ws = web.WebSocketResponse()
         await ws.prepare(request)
@@ -38,7 +41,7 @@ class Server:
     def serve_forever(self):
         app = web.Application()
         app.add_routes(
-            [web.get("/", self.handle),]
+            [web.get("/", self.index), web.get("/ws", self.handle),]
         )
         web.run_app(app)
 
