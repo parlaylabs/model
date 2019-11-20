@@ -1,0 +1,9 @@
+kind: Component
+name: nginx
+image: nginx:latest
+version: 1
+endpoints:
+    - name: http_proxy
+      interface: http_proxy:1
+    - name: http
+      interface: http

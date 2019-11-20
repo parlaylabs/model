@@ -5,5 +5,9 @@ components:
     expose: ["http"]
     replicas: 2
   - name: mysql
+  - name: redis
+  - name: nginx
 relations:
   - ["mysql:db", "ghost:db"]
+  - ["redis:redis", "ghost:cache"]
+  - ["nginx:http_proxy", "ghost:http_proxy"]
