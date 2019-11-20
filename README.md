@@ -10,6 +10,20 @@ While Model uses a YAML formatted document like much of the Kubernetes world it 
 Quickstart
 ----------
 
+```
+$ git clone https://github.com/parlaylabs/model.git
+$ cd model
+$ pipenv install
+$ pipenv shell
+
+# To view the model
+>$ model graph -c examples/basic/ develop
+>$ xdg-open http://localhost:8080
+
+# To render the model 
+>$ model appy -c examples/basic apply -o base
+```
+
 Model
 
 *these are WIP and don't reflect the current code, for example there isn't versioning and Environment isn't implement yet*
