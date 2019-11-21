@@ -1,5 +1,6 @@
 import logging
 import os
+import subprocess
 from pathlib import Path
 
 import click
@@ -107,8 +108,9 @@ def plan(ctx, **kwargs):
 @graph.command()
 @add_options(graph_common)
 @click.option("-o", "--output-dir", default="-")
+@click.option("-k", "--kustomize")
 @click.pass_context
-def apply(ctx, runtime, output_dir):
+def apply(ctx, runtime, output_dir, kustomize):
     s = ctx.obj["store"]
     runtime = ctx.obj.get("runtime")
     graphs = s["kind"].get("Graph")
@@ -118,6 +120,9 @@ def apply(ctx, runtime, output_dir):
     # Apply should be graph at a time
     # or at least a single runtime
 
+    if kustomize and output_dir == "-":
+        raise RuntimeError("You must output to a directory using -o <dir> to kustomize")
+
     if output_dir == "-":
         ren = render.FileRenderer(output_dir)
     else:
@@ -126,6 +131,9 @@ def apply(ctx, runtime, output_dir):
     for graph in graphs:
         graph = graph_manager.plan(graph, s, runtime)
         graph_manager.apply(graph, store, runtime, ren)
+
+    if kustomize:
+        subprocess.run(f"kubectl kustomize {kustomize}", shell=True)
 
 
 @graph.command()
