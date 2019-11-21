@@ -60,7 +60,12 @@ class Service(GraphObj):
 
     def serialized(self):
         return dict(
-            name=self.name, kind=self.kind, endpoints=self.endpoints, config=self.config
+            name=self.name,
+            kind=self.kind,
+            endpoints=self.endpoints,
+            config=self.config,
+            # XXX: temporary
+            status=getattr(self, "status", None),
         )
 
 

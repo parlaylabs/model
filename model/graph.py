@@ -26,7 +26,7 @@ class Graph:
         return self.edges
 
     def serialized(self):
-        return dict(nodes=self.nodes, links=self.edges)
+        return dict(nodes=self.nodes, links=self.edges, model=self.model)
 
     def __post_init__(self):
         # Inject the graph objects belong to so they can resolve other objects

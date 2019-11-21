@@ -3,42 +3,90 @@
     body {
       margin: 0;
     }
+
+
+    #graph {}
+
+    #msg {
+      white-space: pre;
+    }
   </style>
 
   <script crossorigin src="https://unpkg.com/react@16/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@16/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/babel-standalone"></script>
-  <script src="https://unpkg.com/react-force-graph-3d"></script>
+
+  <script crossorigin src="https://unpkg.com/three"></script>
+  <script crossorigin src="https://unpkg.com/three-spritetext"></script>
+  <script crossorigin src="https://unpkg.com/babel-standalone"></script>
+  <script crossorigin src="https://unpkg.com/react-force-graph-3d"></script>
 </head>
 
 <body>
-  <div id="graph"></div>
+  <div class="container">
+    <div id="graph"></div>
+    <div id="msg"></div>
+  </div>
 
   <script type="text/jsx">
-    const { useState } = React;
+    var gen = 0;
+    const { useState, useEffect } = React;
     const ws = new WebSocket("ws://127.0.0.1:8080/ws");
+    const msg = document.getElementById('msg');
+
     // XXX: doing the ws onmessage in the widget is crazy bad design ;)
     const DynamicGraph = () => {
       const [data, setData] = useState({ws: ws,  nodes: [], links: [] });
+  
+      ws.handle_update = (obj) => {
+        obj.nodes.forEach(o => {
+            o.id = o.name;
+        });
+        obj.links.forEach(o => {
+            o.source = o.endpoints[0].service;
+            o.target = o.endpoints[1].service;
+        }); 
+        setData(obj);
+      };
+
       ws.onmessage = (event) => {
-            var obj = JSON.parse(event.data);
-            obj.nodes.forEach(o => {
-                o.id = o.name;
-                o.status = "running";
-            });
-            obj.links.forEach(o => {
-                o.source = o.endpoints[0].service;
-                o.target = o.endpoints[1].service;
-            }); 
-            setData(obj);
+          var obj = JSON.parse(event.data);
+          var k = obj.kind;
+          if (k === undefined) {
+            console.log("unable to dispatch", obj);
+            return;
+          }
+          if (obj.generation !== undefined && obj.generation < gen) {
+            return;
+          }
+          gen = obj.generation;
+          var m = ws['handle_' + k];
+          if (m !== undefined) {
+            m(obj.data);
+          }
         };
+      
+        useEffect(() => {
+          setInterval(() => {
+            var cmd = {kind: 'update', generation: gen};
+            ws.send(JSON.stringify(cmd));
+          }, 5000);
+        }, []);
 
      return <ForceGraph3D
         ws={ws}
-        nodeLabel="name"
         linkLabel="name"
         linkCurvature={0.25}
+        linkWidth={2}
         nodeAutoColorBy="status"
+        onNodeClick={(node, event) => {
+          msg.innerText = JSON.stringify(node, null, true);
+        }}
+        nodeThreeObject={node => {
+          const sprite = new SpriteText(node.name);
+          sprite.color = node.color;
+          sprite.textHeight = 8;
+          return sprite;
+        }}
         enableNodeDrag={true}
         graphData={data}
       />;
