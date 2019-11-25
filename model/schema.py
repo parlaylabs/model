@@ -5,6 +5,7 @@ import jsonschema
 import yaml
 
 from . import entity
+from . import utils
 
 _marker = object()
 schema_map = {}
@@ -46,12 +47,19 @@ class Schema(dict):
         return output
 
 
-def register(kind, schema):
-    schema_map[kind] = schema
+def register_class(cls):
+    register(cls.kind, getattr(cls, "schema", None), cls)
+    return cls
+
+
+def register(kind, schema=None, cls=None):
+    if not schema and not cls:
+        raise ValueError("must supply schema and/or cls to register")
+    schema_map[kind] = (schema, cls)
 
 
 def lookup(kind):
-    return schema_map.get(kind)
+    return schema_map.get(kind, (None, None))
 
 
 def load_and_store(fh, store):
@@ -67,12 +75,14 @@ def load_and_store(fh, store):
             kind = obj["kind"]
             name = obj["name"]
             qual_name = f"{kind}:{name}"
-            schema = lookup(kind)
+            schema, cls = lookup(kind)
             if qual_name in store.qual_name:
                 e = store.qual_name[qual_name]
                 e.add_facet(obj, fp.name)
             else:
                 e = entity.Entity.from_schema(obj, schema, fp.name)
+                if cls is not None:
+                    e = utils.apply_to_dataclass(cls, entity=e, **e.serialized())
             store.add(e)
     finally:
         fp.close()

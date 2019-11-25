@@ -29,16 +29,21 @@ class Kubernetes:
         # push out a deployment
         ports = service.ports
         # XXX: ServiceAccountName
+        dports = []
+        for p in ports:
+            dports.append(dict(containerPort=int(p), protocol="TCP"))
+
         deployment = {
             "apiVersion": "apps/v1",
             "kind": "Deployment",
-            "metadata": {"labels": {"app": service.name}, "name": service.name},
+            "metadata": {"labels": {"app": service.name}, "name": service.name,},
             "spec": {
-                "replicas": 1,
+                "replicas": service.entity.get("replicas"),
                 "selector": {"matchLabels": {"app": service.name}},
                 "template": {
                     "metadata": {
-                        "labels": {"app": service.name, "origin": __package__}
+                        "labels": {"app": service.name, "origin": __package__},
+                        "annotations": {"sidecar.istio.io/inject": True},
                     },
                     "spec": {
                         "containers": [
@@ -46,19 +51,19 @@ class Kubernetes:
                             # XXX: model and support cross cutting concerns here
                             {
                                 "name": service.name,
-                                "image": service.component.get("image"),
+                                "image": service.entity.get("image"),
                                 "imagePullPolicy": "IfNotPresent",
-                                "ports": ports,
+                                "ports": dports,
                             },
                         ],
                         # see https://kubernetes.io/docs/concepts/workloads/pods/pod-topology-spread-constraints/#spread-constraints-for-pods
-                        "topologySpreadConstraints": [
-                            {
-                                "topologyKey": service.name,
-                                "whenUnsatisfiable": "ScheduleAnyway",
-                                "labelSelector": {"name": service.name},
-                            }
-                        ],
+                        # "topologySpreadConstraints": [
+                        #    {
+                        ##        "topologyKey": service.name,
+                        #       "whenUnsatisfiable": "ScheduleAnyway",
+                        #       "labelSelector": {"name": service.name},
+                        #   }
+                        # ],
                     },
                 },
             },
@@ -85,7 +90,7 @@ class Kubernetes:
         }
         output.add(f"{service.name}-service.yaml", serviceSpec, self)
 
-    def render_relation(self, relation, graph, output):
+    def x_render_relation(self, relation, graph, output):
         # For now emit a network policy object
         # XXX: for now we assume a 2 ep relation
         # XXX: in the future we can indicate relations that expose things to
@@ -137,6 +142,65 @@ class Kubernetes:
 class Istio:
     name: str = field(init=False, default="Istio")
 
+    def init(self, graph, output):
+        gateway = {
+            "kind": "Gateway",
+            "spec": {
+                "selector": {"istio": "ingressgateway"},
+                # XXX: add HTTPS (and termination model if needed or a way to get CERTS)
+                "servers": [
+                    {
+                        "hosts": ["*"],
+                        "port": {"protocol": "HTTP", "name": "http", "number": 80},
+                    }
+                ],
+            },
+            "apiVersion": "networking.istio.io/v1alpha3",
+            "metadata": {"name": "ingressgateway", "namespace": "istio-system",},
+        }
+        output.add(f"ingressgateway.yaml", gateway, self)
+
+    def render_service(self, service, graph, output):
+        # FIXME: we will need the ability to handle any type of endpoint the sevice exposes
+        exposed = service.exposed
+        if not exposed:
+            return
+
+        public_name = graph.model.get("environment", {}).get("host")
+
+        for ex in exposed:
+            ep = service.get_endpoint(name=ex)
+            vs = {
+                "apiVersion": "networking.istio.io/v1alpha3",
+                "kind": "VirtualService",
+                "spec": {
+                    "hosts": [f"{service.name}.{public_name}"],
+                    "http": [
+                        {
+                            "route": [
+                                {
+                                    "destination": {
+                                        "host": service.name,
+                                        # XXX: single port at random from set, comeon...
+                                        "port": {"number": int(ep.ports[0])},
+                                    }
+                                }
+                            ],
+                            # XXX: control this or ignore? feels like app detail
+                            "match": [{"uri": {"prefix": "/"}}],
+                        }
+                    ],
+                    # global gateway or 1 per?
+                    "gateways": ["ingressgateway.istio-system.svc.cluster.local"],
+                },
+                "metadata": {
+                    "name": service.name,
+                    # XXX: ns control
+                    "namespace": "default",
+                },
+            }
+            output.add(f"{service.name}-{ep.name}-virtualservice.yaml", vs, self)
+
 
 @register
 @dataclass
@@ -150,7 +214,13 @@ class Kustomize:
 
 @dataclass
 class RuntimeImpl:
+    name: str
+    kind: str = field(init=False, default="RuntimeImpl")
     plugins: List[RuntimePlugin]
+
+    @property
+    def qual_name(self):
+        return self.name
 
     def render(self, graph, outputs):
         # Run three phases populating data dicts into outputs
@@ -193,13 +263,15 @@ def resolve(runtime_name, store):
 
     rspec = store.qual_name[f"Runtime:{runtime_name}"]
     plugins = resolve_each(rspec.plugins)
-    runtime = RuntimeImpl(plugins=plugins)
+    runtime = RuntimeImpl(runtime_name, plugins=plugins)
     _runtimes[runtime_name] = runtime
+    store.add(runtime)
     return runtime
 
 
 def resolve_each(plugins):
     impls = []
+
     for p in plugins:
-        impls.append(_plugins[p.lower()]())
+        impls.append(_plugins[p["name"].lower()]())
     return impls

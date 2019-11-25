@@ -47,6 +47,9 @@ def plan(graph_entity, store, runtime=None):
         if not comp:
             raise ValueError(f"graph references unknown component {comp_spec}")
 
+        # Combine graph config with raw component data as a new facet on the entity
+        # XXX: src could/should be a global graph reference
+        comp.add_facet(comp_spec, "<graph>")
         c_eps = comp.get("endpoints", [])
         exposed = comp_spec.get("expose", [])
         if exposed:
@@ -55,10 +58,7 @@ def plan(graph_entity, store, runtime=None):
                     raise ValueError(f"Unable to expose unknown endpoint {ep}")
 
         s = model.Service(
-            component=comp,
-            name=name,
-            runtime=runtime,
-            config=comp_spec.get("config", {}),
+            entity=comp, name=name, runtime=runtime, config=comp_spec.get("config", {}),
         )
 
         for ep in c_eps:

@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
 from . import entity
+from . import schema
 from . import utils
 
 
@@ -9,11 +10,21 @@ from . import utils
 class GraphObj:
     kind: str
     name: str
+    entity: entity.Entity
     graph: "GraphObj" = field(init=False, default=None)
 
     @property
     def qual_name(self):
         return f"{self.kind}:{self.name}"
+
+    def add_facet(self, data, src_ref=None):
+        self.entity.add_facet(data, src_ref)
+
+    def validate(self):
+        return self.entity.validate()
+
+    def get(self, key, default=None):
+        return self.entity.get(key, default)
 
 
 @dataclass
@@ -23,11 +34,24 @@ class Runtime(GraphObj):
     def serialized(self):
         return dict(name=self.name, kind=self.kind)
 
+    @property
+    def impl(self):
+        # XXX: bad shortcut
+        return self.graph.qual_name[f"RuntimeImpl:{self.name}"]
+
+
+@schema.register_class
+@dataclass
+class Component(GraphObj):
+    name: str
+    kind: str = field(init=False, default="Component")
+    image: str
+    version: str
+
 
 @dataclass
 class Service(GraphObj):
     kind: str = field(init=False, default="Service")
-    component: entity.Entity
     endpoints: List["Endpoint"] = field(init=False, default_factory=list)
     relations: List = field(init=False, default_factory=list)
     runtime: Runtime
@@ -36,7 +60,7 @@ class Service(GraphObj):
 
     def add_endpoint(self, name, interface):
         addresses = []
-        eps = self.component.get("endpoints", [])
+        eps = self.entity.get("endpoints", [])
         ep_spec = utils.pick(eps, name=name, interface=interface)
         addresses = ep_spec.get("addresses", [])
         ep = Endpoint(name=name, interface=interface, service=self, addresses=addresses)
@@ -45,6 +69,12 @@ class Service(GraphObj):
 
     def get_endpoint(self, **kwargs):
         return utils.pick(self.endpoints, **kwargs)
+
+    @property
+    def exposed(self):
+        c = self.graph.model["components"]
+        cspec = utils.pick(c, name=self.name)
+        return cspec.get("expose", [])
 
     @property
     def ports(self):

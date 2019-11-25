@@ -1,6 +1,7 @@
 import copy
 import json
 
+from dataclasses import fields
 from pathlib import Path
 
 _marker = object()
@@ -112,3 +113,14 @@ def dump(obj):
     """Dump objects as JSON. If objects have a serialized method or property it
     will be used in the resulting output"""
     return json.dumps(obj, default=_dumper, indent=2)
+
+
+def apply_to_dataclass(cls, **kwargs):
+    # filter kwargs such that only fields are present
+    args = {}
+    ff = fields(cls)
+    for k in kwargs:
+        f = pick(ff, name=k)
+        if f and f.init is not False:
+            args[k] = kwargs[k]
+    return cls(**args)

@@ -93,7 +93,11 @@ class Server:
         app.on_startup.append(self.open_viewer)
         app.on_shutdown.append(self.cleanup_ws)
         app.add_routes(
-            [web.get("/", self.index), web.get("/ws", self.handle),]
+            [
+                web.get("/", self.index),
+                # web.request("/api/v1/service/<name>", self.update_service)
+                web.get("/ws", self.handle),
+            ]
         )
         self.app = app
         web.run_app(app)
