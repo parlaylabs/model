@@ -1,13 +1,15 @@
 kind: Component
 name: ghost
-image: ghost:1-alpine
+image: ghost:3-alpine
 version: 1
 endpoints:
-    - name: db
-      interface: mysql:5.7
-    - name: http
-      interface: http
-    - name: cache
-      interface: redis:5
-    - name: http_proxy
-      interface: http_proxy:1
+  - name: db
+    interface: mysql:5.7
+  - name: http
+    interface: http
+    addresses:
+      - ports: [2368]
+  - name: cache
+    interface: redis:5
+  - name: http_proxy
+    interface: http_proxy:1

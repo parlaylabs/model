@@ -1,4 +1,4 @@
 kind: Component
 name: ghost
-image: ghost:2-alpine
+image: ghost:3-alpine
 version: 2

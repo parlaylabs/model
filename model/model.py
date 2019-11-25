@@ -42,6 +42,16 @@ class Runtime(GraphObj):
 
 @schema.register_class
 @dataclass
+class Environment(GraphObj):
+    kind: str = field(init=False, default="Environment")
+
+    @property
+    def config(self):
+        return self.entity.get("config", {})
+
+
+@schema.register_class
+@dataclass
 class Component(GraphObj):
     name: str
     kind: str = field(init=False, default="Component")

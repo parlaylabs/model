@@ -75,17 +75,21 @@ def init(ctx, src_ref):
     print(f"init {src_ref}")
 
 
-graph_common = [click.option("-r", "--runtime", default="kubernetes")]
+graph_common = [
+    click.option("-e", "--environment"),
+    click.option("-r", "--runtime", default="kubernetes"),
+]
 
 
 @main.group()
 @add_options(common_args)
 @add_options(graph_common)
 @click.pass_context
-def graph(ctx, runtime, config_dir):
+def graph(ctx, environment, runtime, config_dir):
     s = ctx.obj["store"]
     load_config(s, config_dir)
     ctx.obj["runtime"] = runtime_impl.resolve(runtime, s)
+    ctx.obj["environment"] = s.qual_name[f"Environment:{environment}"]
 
 
 @graph.command()
@@ -94,13 +98,14 @@ def graph(ctx, runtime, config_dir):
 @click.pass_context
 def plan(ctx, **kwargs):
     runtime = ctx.obj.get("runtime")
+    env = ctx.obj["environment"]
     s = ctx.obj["store"]
     graphs = s["kind"].get("Graph")
     if not graphs:
         raise KeyError("No graphs to plan in config")
     graphs = graphs["name"].values()
     for graph in graphs:
-        graph = graph_manager.plan(graph, s, runtime)
+        graph = graph_manager.plan(graph, s, env, runtime)
         print(f"plan graph {graph}")
     log.debug(ctx.obj["store"])
 
@@ -110,10 +115,11 @@ def plan(ctx, **kwargs):
 @click.option("-o", "--output-dir", default="-")
 @click.option("-k", "--kustomize")
 @click.pass_context
-def apply(ctx, runtime, output_dir, kustomize):
+def apply(ctx, environment, runtime, output_dir, kustomize):
     s = ctx.obj["store"]
     runtime = ctx.obj.get("runtime")
     graphs = s["kind"].get("Graph")
+    environment = ctx.obj["environment"]
     if not graphs:
         raise KeyError("No graphs to plan in config")
     graphs = graphs["name"].values()
@@ -129,7 +135,7 @@ def apply(ctx, runtime, output_dir, kustomize):
         ren = render.DirectoryRenderer(output_dir)
 
     for graph in graphs:
-        graph = graph_manager.plan(graph, s, runtime)
+        graph = graph_manager.plan(graph, s, environment, runtime)
         graph_manager.apply(graph, store, runtime, ren)
 
     if kustomize:

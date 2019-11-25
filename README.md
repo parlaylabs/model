@@ -67,21 +67,36 @@ provider:
 Concepts
 --------
 
-**Application** - An address and interface through which business use cases are provided. Typically this includes some exposed IP address and an idea of how to comunicate at that address. 
+**Application** - An address and interface through which business use cases are
+provided. Typically this includes some exposed IP address and an idea of how to
+comunicate at that address. 
 
-**Component** - An Application definition of attributes and workload known at build time. These define the a re-useable unit of deployment w/o runtime bindings.
+**Component** - An Application definition of attributes and workload known at
+build time. These define the a re-useable unit of deployment w/o runtime
+bindings.
 
 **Endpoint** - An address, an interface and a version
 
-**Graph** - A set of interconnected Applications. Nodes in the graph are Applications and edges are Relations. A graph implements the same interface as Application externally using an optional system to promote Endpoints of included Services which can be exposed or referenced in another graph. This will allow hiding of implementation details while still allowing reuse. 
+**Environment** - A configuration representing where a model is to be run. This
+includes non-reuable parts of a deployment, such as things like the public DNS
+name associated with a runtime. 
 
-**Interface** - A high level defintion of a named protocol to expect. This is defined alongside a Endpoint and used to inform a Relation.
+**Graph** - A set of interconnected Applications. Nodes in the graph are
+Applications and edges are Relations. A graph implements the same interface as
+Application externally using an optional system to promote Endpoints of
+included Services which can be exposed or referenced in another graph. This
+will allow hiding of implementation details while still allowing reuse. 
+
+**Interface** - A high level defintion of a named protocol to expect. This is
+defined alongside a Endpoint and used to inform a Relation.
 
 **Model** - A graph defining Applications and Relations between them.
 
 **Relation** - A set of one or more endpoints and a selector that indicates activity.
 
-**Runtime** - Any compute platform for which a mapping from model to running code exists.
+**Runtime** - Any compute platform for which a mapping from model to running
+code exists. By selecting among various plugins we can determine 'how' the
+model will be run.
 
 
 Workflow

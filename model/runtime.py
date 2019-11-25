@@ -166,15 +166,14 @@ class Istio:
         if not exposed:
             return
 
-        public_name = graph.model.get("environment", {}).get("host")
-
+        public_dns = graph.environment.config["public_dns"]
         for ex in exposed:
             ep = service.get_endpoint(name=ex)
             vs = {
                 "apiVersion": "networking.istio.io/v1alpha3",
                 "kind": "VirtualService",
                 "spec": {
-                    "hosts": [f"{service.name}.{public_name}"],
+                    "hosts": [f"{service.name}.{public_dns}"],
                     "http": [
                         {
                             "route": [

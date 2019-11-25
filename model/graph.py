@@ -16,6 +16,7 @@ class Graph:
     edges: Dict[str, model.Relation]
     model: model.GraphObj
     runtime: runtime_impl
+    environment: model.Environment
 
     @property
     def services(self):
@@ -34,7 +35,7 @@ class Graph:
             entity.graph = self
 
 
-def plan(graph_entity, store, runtime=None):
+def plan(graph_entity, store, environment, runtime=None):
     # for now this is semantic object validation (beyond what schemas give us)
     services = {}
     relations = {}
@@ -96,6 +97,7 @@ def plan(graph_entity, store, runtime=None):
         nodes=list(services.values()),
         edges=list(relations.values()),
         runtime=runtime,
+        environment=environment,
     )
     # view(g)
     return g
