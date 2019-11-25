@@ -33,6 +33,8 @@ class Kubernetes:
         for p in ports:
             dports.append(dict(containerPort=int(p), protocol="TCP"))
 
+        sconfig = graph.environment.config.get("services", {}).get(service.name, {})
+        senv = sconfig.get("environment", {})
         deployment = {
             "apiVersion": "apps/v1",
             "kind": "Deployment",
@@ -43,7 +45,6 @@ class Kubernetes:
                 "template": {
                     "metadata": {
                         "labels": {"app": service.name, "origin": __package__},
-                        "annotations": {"sidecar.istio.io/inject": True},
                     },
                     "spec": {
                         "containers": [
@@ -54,6 +55,7 @@ class Kubernetes:
                                 "image": service.entity.get("image"),
                                 "imagePullPolicy": "IfNotPresent",
                                 "ports": dports,
+                                "env": senv,
                             },
                         ],
                         # see https://kubernetes.io/docs/concepts/workloads/pods/pod-topology-spread-constraints/#spread-constraints-for-pods
@@ -83,58 +85,12 @@ class Kubernetes:
             "spec": {
                 "selector": {"app": service.name},
                 "ports": ports,
-                # XXX: specify elb/nlb annotations when environment is AWS
+                # XXX: specify elb/nlb annotations when url is AWS
                 # see https://kubernetes.io/docs/concepts/services-networking/service/#connection-draining-on-aws
                 # https://kubernetes.io/docs/concepts/services-networking/service/#aws-nlb-support
             },
         }
         output.add(f"{service.name}-service.yaml", serviceSpec, self)
-
-    def x_render_relation(self, relation, graph, output):
-        # For now emit a network policy object
-        # XXX: for now we assume a 2 ep relation
-        # XXX: in the future we can indicate relations that expose things to
-        # XXX: ring/quourm styled internal patterns as well
-        if len(relation.endpoints) != 2:
-            log.info(f"Unable to process endpoints for {relation}")
-            return
-        service_a = relation.endpoints[0]
-        service_b = relation.endpoints[1]
-        ports = []
-        for p in service_a.ports:
-            ports.append({"protocol": "TCP", "port": p})
-
-        net_policy = {
-            "apiVersion": "networking.k8s.io/v1",
-            "kind": "NetworkPolicy",
-            "metadata": {
-                "name": f"{service_a.name}-net-policy",
-                # XXX: how to map?
-                "namespace": "default",
-            },
-            "spec": {
-                "podSelector": {"matchLabels": {"app": service_a.name,}},
-                "policyTypes": ["Ingress", "Egress"],
-                "ingress": {"from": [], "ports": ports},
-                "egress": [],
-            },
-        }
-        output.add(f"{relation.name}-net-policy.yaml", net_policy, self)
-
-        default_policy_key = f"default-net-policy.yaml"
-        if default_policy_key not in output:
-            # Disable ingress by default, we want to own the network with the graph
-            # to avoid whole suites of other possible issues
-            output.add(
-                default_policy_key,
-                {
-                    "apiVersion": "networking.k8s.io/v1",
-                    "kind": "NetworkPolicy",
-                    "metadata": {"name": "default-deny"},
-                    "spec": {"podSelector": {}, "policyTypes": ["Ingress"]},
-                },
-                self,
-            )
 
 
 @register
@@ -207,6 +163,9 @@ class Kustomize:
     name: str = field(init=False, default="Kustomize")
 
     def fini(self, graph, output):
+        # XXX: temp workaround till we assign outputs to layers
+        if isinstance(output, render.FileRenderer):
+            return
         # Render a kustomize resource file into what we presume to be a base dir
         output.add("kustomization.yaml", {"resources": list(output.index.keys())}, self)
 
@@ -230,6 +189,7 @@ class RuntimeImpl:
         # advantage that we'd expect some validate, however the ability to break
         # this into layers here wins, actually applying this to the runtime (k8s)
         # will validate the results.
+
         for plugin in self.plugins:
             m = getattr(plugin, "init", None)
             if m:
@@ -259,7 +219,6 @@ def resolve(runtime_name, store):
     # Look for a runtime entry in the store
     if runtime_name in _runtimes:
         return _runtimes[runtime_name]
-
     rspec = store.qual_name[f"Runtime:{runtime_name}"]
     plugins = resolve_each(rspec.plugins)
     runtime = RuntimeImpl(runtime_name, plugins=plugins)

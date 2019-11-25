@@ -11,5 +11,3 @@ relations:
   - ["mysql:db", "ghost:db"]
   - ["redis:redis", "ghost:cache"]
   - ["nginx:http_proxy", "ghost:http_proxy"]
-environment:
-  name: dev
