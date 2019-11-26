@@ -1,0 +1,9 @@
+kind: Component
+name: hello
+image: nginxdemos/hello
+version: 1
+endpoints:
+  - name: http
+    interface: http
+    addresses:
+      - ports: [80]

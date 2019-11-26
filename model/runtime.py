@@ -34,7 +34,7 @@ class Kubernetes:
             dports.append(dict(containerPort=int(p), protocol="TCP"))
 
         sconfig = graph.environment.config.get("services", {}).get(service.name, {})
-        senv = sconfig.get("environment", {})
+        senv = sconfig.get("environment", [])
         deployment = {
             "apiVersion": "apps/v1",
             "kind": "Deployment",
@@ -70,6 +70,7 @@ class Kubernetes:
                 },
             },
         }
+
         output.add(f"{service.name}-deployment.yaml", deployment, self)
 
         # next push out a service object

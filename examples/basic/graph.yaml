@@ -7,6 +7,9 @@ components:
   - name: mysql
   - name: redis
   - name: nginx
+  - name: hello
+    expose: ["http"]
+    replicas: 1
 relations:
   - ["mysql:db", "ghost:db"]
   - ["redis:redis", "ghost:cache"]
