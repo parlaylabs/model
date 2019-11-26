@@ -52,7 +52,7 @@ class Kubernetes:
                             # XXX: model and support cross cutting concerns here
                             {
                                 "name": service.name,
-                                "image": service.entity.get("image"),
+                                "image": service.entity.image,
                                 "imagePullPolicy": "IfNotPresent",
                                 "ports": dports,
                                 "env": senv,

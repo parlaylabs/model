@@ -1,6 +1,7 @@
 import copy
 import json
 
+from collections import ChainMap
 from dataclasses import fields
 from pathlib import Path
 
@@ -74,12 +75,37 @@ def deepmerge(dest, src):
     This is destructive (`dest` is modified), but values
     from `src` are passed through `copy.deepcopy`.
     """
-    for k, v in src.items():
-        if dest.get(k) and isinstance(v, dict):
-            deepmerge(dest[k], v)
-        else:
-            dest[k] = copy.deepcopy(v)
+    if isinstance(src, dict):
+        for k, v in src.items():
+            if dest.get(k) and isinstance(v, dict):
+                deepmerge(dest[k], v)
+            else:
+                dest[k] = copy.deepcopy(v)
+    else:
+        return copy.copy(src)
     return dest
+
+
+class MergingChainMap(ChainMap):
+    def __getitem__(self, key):
+        parts = []
+        for mapping in self.maps:
+            try:
+                v = mapping[key]
+                parts.insert(0, v)
+            except KeyError:
+                pass
+        if not parts:
+            return self.__missing__(key)
+        # Deep merge the components so last write wins
+        # we do insert 0 above so we can use natural orderin here
+        if len(parts) == 1:
+            # fast path
+            return parts[0]
+        r = {}
+        while parts:
+            deepmerge(r, parts.pop(0))
+        return r
 
 
 def pick(lst, default=None, **kwargs):

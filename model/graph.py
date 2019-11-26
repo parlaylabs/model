@@ -40,6 +40,7 @@ def plan(graph_entity, store, environment, runtime=None):
     services = {}
     relations = {}
     components = {}
+    interfaces = store.kind.get("Interface", {}).get("name", {})
 
     for comp_spec in graph_entity.get("components", []):
         # ensure we have a component defintion for each entry
@@ -63,7 +64,19 @@ def plan(graph_entity, store, environment, runtime=None):
         )
 
         for ep in c_eps:
-            s.add_endpoint(name=ep["name"], interface=ep["interface"])
+            # look up a known interface if it exists and use
+            # its values as defaults
+            addresses = ep.get("addresses", [])
+
+            if ep["name"] in interfaces:
+                #    # XXX: this would have to improve and be version aware if its
+                #    # going to work this way.
+                iface = interfaces[ep["name"]].get("defaults", {})
+                defaults = iface.get("addresses").copy()
+                utils.deepmerge(defaults, addresses)
+            s.add_endpoint(
+                name=ep["name"], interface=ep["interface"], addresses=addresses
+            )
         components[name] = comp
         services[s.name] = s
         store.add(s)

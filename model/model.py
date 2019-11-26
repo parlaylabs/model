@@ -68,7 +68,7 @@ class Service(GraphObj):
     # TODO: this can be in init and draw config from the graph
     config: Dict[str, Any] = field(default_factory=dict)
 
-    def add_endpoint(self, name, interface):
+    def add_endpoint(self, name, interface, addresses=None):
         addresses = []
         eps = self.entity.get("endpoints", [])
         ep_spec = utils.pick(eps, name=name, interface=interface)

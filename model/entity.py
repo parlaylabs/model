@@ -28,7 +28,7 @@ class Entity:
     """
 
     def __init__(self, data=None, schema=None, src_ref=None):
-        self.__data = ChainMap()
+        self.__data = utils.MergingChainMap()
         self.schema = schema
         self.src_ref = []
         if data:
@@ -50,7 +50,7 @@ class Entity:
         """populate instance from schema defaults (or None)"""
         if schema:
             defaults = schema.schema_defaults(schema)
-            utils.deepmerge(defaults, data)
+            defaults = utils.deepmerge(defaults, data)
         else:
             defaults = data
         return cls(defaults, schema, src_ref)
