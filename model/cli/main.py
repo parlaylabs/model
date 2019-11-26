@@ -43,7 +43,20 @@ def load_config(store, config_dir):
         obj.validate()
 
 
-common_args = [click.option("-c", "--config-dir", default="conf")]
+def load_configs(store, dirs):
+    for d in dirs:
+        load_config(store, d)
+
+
+common_args = [click.option("-c", "--config-dir", multiple=True, default="conf")]
+
+# def ensure(ctx, **kwargs):
+#    ctx.ensure_object(dict)
+
+# handlers = {
+#    None: ensure
+#    "log_level":
+# }
 
 
 @click.group()
@@ -87,7 +100,7 @@ graph_common = [
 @click.pass_context
 def graph(ctx, environment, runtime, config_dir):
     s = ctx.obj["store"]
-    load_config(s, config_dir)
+    load_configs(s, config_dir)
     ctx.obj["runtime"] = runtime_impl.resolve(runtime, s)
     ctx.obj["environment"] = s.qual_name[f"Environment:{environment}"]
 
