@@ -3,6 +3,8 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Dict
 
+import jsonmerge
+
 from . import model
 from . import runtime as runtime_impl
 from . import utils
@@ -69,11 +71,16 @@ def plan(graph_entity, store, environment, runtime=None):
             addresses = ep.get("addresses", [])
 
             if ep["name"] in interfaces:
-                #    # XXX: this would have to improve and be version aware if its
-                #    # going to work this way.
+                # XXX: this would have to improve and be version aware if its
+                # going to work this way.
                 iface = interfaces[ep["name"]].get("defaults", {})
                 defaults = iface.get("addresses").copy()
-                utils.deepmerge(defaults, addresses)
+                if not addresses:
+                    addresses = defaults
+                else:
+                    addresses = jsonmerge.merge(
+                        defaults, addresses, dict(mergeStrategy="arrayMergeByIndex"),
+                    )
             s.add_endpoint(
                 name=ep["name"], interface=ep["interface"], addresses=addresses
             )

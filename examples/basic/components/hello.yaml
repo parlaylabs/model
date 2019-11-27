@@ -5,5 +5,3 @@ version: 1
 endpoints:
   - name: http
     interface: http
-    addresses:
-      - ports: [80]

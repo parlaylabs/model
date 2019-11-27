@@ -5,6 +5,8 @@ from collections import ChainMap
 from dataclasses import fields
 from pathlib import Path
 
+import jsonmerge
+
 _marker = object()
 
 
@@ -68,24 +70,6 @@ def interpolate(data, data_context=None):
     return result
 
 
-def deepmerge(dest, src):
-    """
-    Deep merge of two dicts.
-
-    This is destructive (`dest` is modified), but values
-    from `src` are passed through `copy.deepcopy`.
-    """
-    if isinstance(src, dict):
-        for k, v in src.items():
-            if dest.get(k) and isinstance(v, dict):
-                deepmerge(dest[k], v)
-            else:
-                dest[k] = copy.deepcopy(v)
-    else:
-        return copy.copy(src)
-    return dest
-
-
 class MergingChainMap(ChainMap):
     def __getitem__(self, key):
         parts = []
@@ -104,7 +88,7 @@ class MergingChainMap(ChainMap):
             return parts[0]
         r = {}
         while parts:
-            deepmerge(r, parts.pop(0))
+            r = jsonmerge.merge(r, parts.pop(0))
         return r
 
 

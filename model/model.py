@@ -69,10 +69,6 @@ class Service(GraphObj):
     config: Dict[str, Any] = field(default_factory=dict)
 
     def add_endpoint(self, name, interface, addresses=None):
-        addresses = []
-        eps = self.entity.get("endpoints", [])
-        ep_spec = utils.pick(eps, name=name, interface=interface)
-        addresses = ep_spec.get("addresses", [])
         ep = Endpoint(name=name, interface=interface, service=self, addresses=addresses)
         self.endpoints.append(ep)
         return ep

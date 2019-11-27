@@ -1,4 +1,5 @@
 from io import IOBase
+import logging
 from pathlib import Path
 
 import jsonschema
@@ -7,6 +8,7 @@ import yaml
 from . import entity
 from . import utils
 
+log = logging.getLogger(__package__)
 _marker = object()
 schema_map = {}
 
@@ -86,6 +88,18 @@ def load_and_store(fh, store):
             store.add(e)
     finally:
         fp.close()
+
+
+def load_config(store, config_dir):
+    p = Path(config_dir)
+    if not p.exists() or not p.is_dir():
+        raise OSError("""No config directory -- post alpha this won't be required""")
+    for yml in sorted(p.rglob("*.yaml")):
+        log.debug(f"Loading config from {yml}")
+        load_and_store(yml, store)
+    # Validate after all loading is done
+    for obj in store.qual_name.values():
+        obj.validate()
 
 
 # v1 schema definitions

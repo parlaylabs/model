@@ -137,7 +137,7 @@ class Istio:
                                 {
                                     "destination": {
                                         "host": service.name,
-                                        # XXX: single port at random from set, comeon...
+                                        # XXX: single port at random from set, come on...
                                         "port": {"number": int(ep.ports[0])},
                                     }
                                 }

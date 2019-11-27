@@ -45,7 +45,7 @@ def load_config(store, config_dir):
 
 def load_configs(store, dirs):
     for d in dirs:
-        load_config(store, d)
+        schema.load_config(store, d)
 
 
 common_args = [click.option("-c", "--config-dir", multiple=True, default="conf")]

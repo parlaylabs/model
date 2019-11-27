@@ -5,6 +5,7 @@ import yaml
 
 from collections import ChainMap
 
+import jsonmerge
 from jsonschema import validate
 from jsonschema.exceptions import ValidationError
 from pathlib import Path
@@ -50,7 +51,8 @@ class Entity:
         """populate instance from schema defaults (or None)"""
         if schema:
             defaults = schema.schema_defaults(schema)
-            defaults = utils.deepmerge(defaults, data)
+            merger = jsonmerge.Merger(schema)
+            defaults = merger.merge(defaults, data)
         else:
             defaults = data
         return cls(defaults, schema, src_ref)
