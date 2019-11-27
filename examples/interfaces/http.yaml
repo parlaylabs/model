@@ -1,0 +1,5 @@
+kind: Interface
+name: http
+defaults:
+  addresses:
+    - ports: [80]
