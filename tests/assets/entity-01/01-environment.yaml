@@ -1,0 +1,4 @@
+kind: Environment
+name: dev
+config:
+    public_dns: "example.com"

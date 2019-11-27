@@ -1,0 +1,10 @@
+# Override example with real values we don't want to check into public repo
+kind: Environment
+name: dev
+config:
+    public_dns: "mystery.info"
+    services:
+        ghost:
+            environment:
+                - name: url
+                  value: http://ghost.mystery.info
