@@ -44,9 +44,15 @@ class Renderer(list):
         annotations["plugin"] = plugin
         ent = Output(name, data, annotations)
         self.append(ent)
+        if ent.name in self.index:
+            # we are replacing an old entity
+            # we could/should notify user?
+            pass
         self.index[ent.name] = ent
 
     def interpolate(self):
+        # This happens after all the base data has been added, it allows
+        # more sophisticated interpolations
         for ent in self:
             ctx = {}
             ctx.update(ent.data)

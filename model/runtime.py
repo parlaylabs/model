@@ -35,24 +35,42 @@ class Kubernetes:
 
         sconfig = graph.environment.config.get("services", {}).get(service.name, {})
         senv = sconfig.get("environment", [])
+
+        labels = {
+            "app.kubernetes.io/name": service.name,
+            "app.kubernetes.io/version": str(service.entity.version),
+            "app.kubernetes.io/component": service.entity.name,
+            # XXX: become a graph ref
+            "app.kubernetes.io/part-of": graph.model.name,
+            "app.kubernetes.io/managed-by": __package__,
+        }
+
+        ns = dict(
+            apiVersion="v1",
+            kind="Namespace",
+            metadata=dict(name=graph.model.name, labels={}),
+        )
+        output.add(f"00-{graph.model.name}-namespace.yaml", ns, self, graph=graph)
+
+        pod_labels = {
+            "app": service.name,
+            "version": str(service.entity.version),
+        }
+        pod_labels.update(labels)
+
         deployment = {
             "apiVersion": "apps/v1",
             "kind": "Deployment",
-            "metadata": {"labels": {"app": service.name}, "name": service.name,},
+            "metadata": {
+                "labels": labels,
+                "namespace": graph.model.name,
+                "name": service.name,
+            },
             "spec": {
                 "replicas": service.entity.get("replicas"),
-                "selector": {"matchLabels": {"app": service.name}},
+                "selector": {"matchLabels": {"app.kubernetes.io/name": service.name}},
                 "template": {
-                    "metadata": {
-                        "labels": {
-                            "app.kubernetes.io/name": service.name,
-                            "app.kubernetes.io/version": service.entity.version,
-                            "app.kubernetes.io/component": service.entity.name,
-                            # XXX: become a graph ref
-                            "app.kubernetes.io/part-of": graph.model.name,
-                            "app.kubernetes.io/managed-by": __package__,
-                        },
-                    },
+                    "metadata": {"labels": pod_labels},
                     "spec": {
                         "containers": [
                             # XXX: join with context/runtime container registry
@@ -89,7 +107,7 @@ class Kubernetes:
         serviceSpec = {
             "apiVersion": "v1",
             "kind": "Service",
-            "metadata": {"name": service.name},
+            "metadata": {"namespace": graph.model.name, "name": service.name},
             "spec": {
                 "selector": {"app": service.name},
                 "ports": ports,
@@ -124,6 +142,12 @@ class Istio:
         }
         output.add(f"ingressgateway.yaml", gateway, self)
 
+    def fini(self, graph, output):
+        ns_out = f"00-{graph.model.name}-namespace.yaml"
+        if ns_out in output:
+            ent = output.index[ns_out]
+            ent.data["metadata"]["labels"]["istio-injection"] = True
+
     def render_service(self, service, graph, output):
         # FIXME: we will need the ability to handle any type of endpoint the sevice exposes
         exposed = service.exposed
@@ -143,7 +167,7 @@ class Istio:
                             "route": [
                                 {
                                     "destination": {
-                                        "host": service.name,
+                                        "host": f"{service.name}.{graph.model.name}.svc.cluster.local",
                                         # XXX: single port at random from set, come on...
                                         "port": {"number": int(ep.ports[0])},
                                     }
@@ -156,11 +180,7 @@ class Istio:
                     # global gateway or 1 per?
                     "gateways": ["ingressgateway.istio-system.svc.cluster.local"],
                 },
-                "metadata": {
-                    "name": service.name,
-                    # XXX: ns control
-                    "namespace": "default",
-                },
+                "metadata": {"namespace": graph.model.name, "name": service.name,},
             }
             output.add(
                 f"{service.name}-{ep.name}-virtualservice.yaml",
