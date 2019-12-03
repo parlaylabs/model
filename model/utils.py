@@ -27,16 +27,19 @@ class AttrAccess(dict):
 def nested_get(adict, path, default=None, sep="."):
     o = adict
     for part in path.split(sep):
-        if part not in o:
-            return default
-        o = o[part]
+        try:
+            o = getattr(o, part)
+        except AttributeError:
+            if part not in o:
+                return default
+            o = o[part]
     return o
 
 
 def _interpolate_str(v, data_context):
-    if v.startswith("{") and v.endswith("}") and v.count("{") == 1:
+    if v.startswith("{{") and v.endswith("}}") and v.count("{") == 2:
         # parse out the path. resolve it
-        v = v[1:-1]
+        v = v[2:-2]
         return interpolate(nested_get(data_context, v), data_context)
     else:
         return v.format_map(data_context)

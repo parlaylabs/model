@@ -46,6 +46,13 @@ class Renderer(list):
         self.append(ent)
         self.index[ent.name] = ent
 
+    def interpolate(self):
+        for ent in self:
+            ctx = {}
+            ctx.update(ent.data)
+            ctx.update(ent.annotations)
+            ent.data = utils.interpolate(ent.data, ctx)
+
     def __contains__(self, key):
         return key in self.index
 
@@ -54,6 +61,7 @@ class DirectoryRenderer(Renderer):
     def write(self):
         if not self.root.exists():
             self.root.mkdir()
+        self.interpolate()
         for ent in self:
             ofn = self.root / ent.name
             with open(ofn, "w", encoding="utf-8") as fp:
@@ -66,6 +74,7 @@ class DirectoryRenderer(Renderer):
 
 class FileRenderer(Renderer):
     def write(self):
+        self.interpolate()
         with streamer(self.root) as fp:
             for ent in self:
                 data = ent.data

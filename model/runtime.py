@@ -44,7 +44,14 @@ class Kubernetes:
                 "selector": {"matchLabels": {"app": service.name}},
                 "template": {
                     "metadata": {
-                        "labels": {"app": service.name, "origin": __package__},
+                        "labels": {
+                            "app.kubernetes.io/name": service.name,
+                            "app.kubernetes.io/version": service.entity.version,
+                            "app.kubernetes.io/component": service.entity.name,
+                            # XXX: become a graph ref
+                            "app.kubernetes.io/part-of": graph.model.name,
+                            "app.kubernetes.io/managed-by": __package__,
+                        },
                     },
                     "spec": {
                         "containers": [
@@ -71,7 +78,7 @@ class Kubernetes:
             },
         }
 
-        output.add(f"{service.name}-deployment.yaml", deployment, self)
+        output.add(f"{service.name}-deployment.yaml", deployment, self, service=service)
 
         # next push out a service object
         ports = []
@@ -91,7 +98,7 @@ class Kubernetes:
                 # https://kubernetes.io/docs/concepts/services-networking/service/#aws-nlb-support
             },
         }
-        output.add(f"{service.name}-service.yaml", serviceSpec, self)
+        output.add(f"{service.name}-service.yaml", serviceSpec, self, service=service)
 
 
 @register
