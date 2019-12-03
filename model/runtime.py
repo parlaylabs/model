@@ -162,7 +162,12 @@ class Istio:
                     "namespace": "default",
                 },
             }
-            output.add(f"{service.name}-{ep.name}-virtualservice.yaml", vs, self)
+            output.add(
+                f"{service.name}-{ep.name}-virtualservice.yaml",
+                vs,
+                self,
+                service=service,
+            )
 
 
 @register
