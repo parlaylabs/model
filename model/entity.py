@@ -51,6 +51,7 @@ class Entity:
         """populate instance from schema defaults (or None)"""
         if schema:
             defaults = schema.schema_defaults(schema)
+            # Note that here we take advantage of jsonmerge's schema annotations to drive the merge behavior.
             merger = jsonmerge.Merger(schema)
             defaults = merger.merge(defaults, data)
         else:

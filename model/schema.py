@@ -57,6 +57,8 @@ def register_class(cls):
 def register(kind, schema=None, cls=None):
     if not schema and not cls:
         raise ValueError("must supply schema and/or cls to register")
+    if schema and not isinstance(schema, Schema):
+        schema = Schema(schema)
     schema_map[kind] = (schema, cls)
 
 
@@ -103,3 +105,24 @@ def load_config(store, config_dir):
 
 
 # v1 schema definitions
+# XXX: These must actually be versioned in the future
+register(
+    "Graph",
+    schema={
+        "$schema": "http://json-schema.org/draft-08/schema#",
+        "properties": {
+            "name": dict(type="string"),
+            "kind": dict(type="string"),
+            "services": {"type": "array", "items": {"type": "object",},},
+            "relations": {
+                "type": "array",
+                "items": {
+                    type: "array",
+                    "items": {"type": "string", "minItems": 1, "uniqueItems": True},
+                },
+            },
+        },
+        "required": ["name", "kind", "services"],
+    },
+)
+

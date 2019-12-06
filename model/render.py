@@ -1,4 +1,5 @@
 import io
+import logging
 import sys
 
 from contextlib import contextmanager
@@ -9,6 +10,8 @@ from typing import Any, Dict
 import yaml
 
 from . import utils
+
+log = logging.getLogger(__package__)
 
 
 @contextmanager
@@ -54,10 +57,15 @@ class Renderer(list):
         # This happens after all the base data has been added, it allows
         # more sophisticated interpolations
         for ent in self:
+            # XXX: this should be properly assembled in the runtime layer, not here
             ctx = {}
             ctx.update(ent.data)
             ctx.update(ent.annotations)
-            ent.data = utils.interpolate(ent.data, ctx)
+            log.debug(f"Interpolating {ent.name}")
+            try:
+                ent.data = utils.interpolate(ent.data, ctx)
+            except KeyError as e:
+                breakpoint()
 
     def __contains__(self, key):
         return key in self.index

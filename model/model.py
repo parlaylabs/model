@@ -11,6 +11,7 @@ class GraphObj:
     kind: str
     name: str
     entity: entity.Entity
+    namespace: str = field(init=False, default="default")
     graph: "GraphObj" = field(init=False, default=None)
 
     @property
@@ -78,9 +79,9 @@ class Service(GraphObj):
 
     @property
     def exposed(self):
-        c = self.graph.model["components"]
-        cspec = utils.pick(c, name=self.name)
-        return cspec.get("expose", [])
+        # XXX: we are combining at runtime rather than at creation
+        # change this pattern
+        return self.entity.get("expose", [])
 
     @property
     def ports(self):

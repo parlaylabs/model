@@ -41,16 +41,16 @@ class Kubernetes:
             "app.kubernetes.io/version": str(service.entity.version),
             "app.kubernetes.io/component": service.entity.name,
             # XXX: become a graph ref
-            "app.kubernetes.io/part-of": graph.model.name,
+            "app.kubernetes.io/part-of": graph.name,
             "app.kubernetes.io/managed-by": __package__,
         }
 
         ns = dict(
             apiVersion="v1",
             kind="Namespace",
-            metadata=dict(name=graph.model.name, labels={}),
+            metadata=dict(name=graph.name, labels={}),
         )
-        output.add(f"00-{graph.model.name}-namespace.yaml", ns, self, graph=graph)
+        output.add(f"00-{graph.name}-namespace.yaml", ns, self, graph=graph)
 
         pod_labels = {
             "app": service.name,
@@ -63,7 +63,7 @@ class Kubernetes:
             "kind": "Deployment",
             "metadata": {
                 "labels": labels,
-                "namespace": graph.model.name,
+                "namespace": graph.name,
                 "name": service.name,
             },
             "spec": {
@@ -107,7 +107,7 @@ class Kubernetes:
         serviceSpec = {
             "apiVersion": "v1",
             "kind": "Service",
-            "metadata": {"namespace": graph.model.name, "name": service.name},
+            "metadata": {"namespace": graph.name, "name": service.name},
             "spec": {
                 "selector": {"app": service.name},
                 "ports": ports,
@@ -143,7 +143,7 @@ class Istio:
         output.add(f"ingressgateway.yaml", gateway, self)
 
     def fini(self, graph, output):
-        ns_out = f"00-{graph.model.name}-namespace.yaml"
+        ns_out = f"00-{graph.name}-namespace.yaml"
         if ns_out in output:
             ent = output.index[ns_out]
             ent.data["metadata"]["labels"]["istio-injection"] = True
@@ -167,7 +167,7 @@ class Istio:
                             "route": [
                                 {
                                     "destination": {
-                                        "host": f"{service.name}.{graph.model.name}.svc.cluster.local",
+                                        "host": f"{service.name}.{graph.name}.svc.cluster.local",
                                         # XXX: single port at random from set, come on...
                                         "port": {"number": int(ep.ports[0])},
                                     }
@@ -180,7 +180,7 @@ class Istio:
                     # global gateway or 1 per?
                     "gateways": ["ingressgateway.istio-system.svc.cluster.local"],
                 },
-                "metadata": {"namespace": graph.model.name, "name": service.name,},
+                "metadata": {"namespace": graph.name, "name": service.name,},
             }
             output.add(
                 f"{service.name}-{ep.name}-virtualservice.yaml",
@@ -200,7 +200,9 @@ class Kustomize:
         if isinstance(output, render.FileRenderer):
             return
         # Render a kustomize resource file into what we presume to be a base dir
-        output.add("kustomization.yaml", {"resources": list(output.index.keys())}, self)
+        output.add(
+            "kustomization.yaml", {"resources": sorted(output.index.keys())}, self
+        )
 
 
 @dataclass

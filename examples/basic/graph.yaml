@@ -1,6 +1,6 @@
 kind: Graph
 name: blog
-components:
+services:
   - name: ghost
     expose: ["http"]
     replicas: 1

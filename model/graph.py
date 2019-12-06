@@ -5,6 +5,7 @@ from typing import Any, Dict
 
 import jsonmerge
 
+from . import entity
 from . import model
 from . import runtime as runtime_impl
 from . import utils
@@ -16,9 +17,13 @@ log = logging.getLogger(__name__)
 class Graph:
     nodes: Dict[str, model.Service]
     edges: Dict[str, model.Relation]
-    model: model.GraphObj
+    entity: entity.Entity
     runtime: runtime_impl
     environment: model.Environment
+
+    @property
+    def name(self):
+        return self.entity.name
 
     @property
     def services(self):
@@ -38,13 +43,14 @@ class Graph:
 
 
 def plan(graph_entity, store, environment, runtime=None):
+    # runtime is provided as a default, it can/should be overridden and resolved per Service
     # for now this is semantic object validation (beyond what schemas give us)
     services = {}
     relations = {}
     components = {}
     interfaces = store.kind.get("Interface", {}).get("name", {})
 
-    for comp_spec in graph_entity.get("components", []):
+    for comp_spec in graph_entity.get("services", []):
         # ensure we have a component defintion for each entry
         name = comp_spec.get("name")
         comp = store["kind"]["Component"]["name"].get(name)
@@ -113,7 +119,7 @@ def plan(graph_entity, store, environment, runtime=None):
         store.add(r)
 
     g = Graph(
-        model=graph_entity,
+        entity=graph_entity,
         nodes=list(services.values()),
         edges=list(relations.values()),
         runtime=runtime,
