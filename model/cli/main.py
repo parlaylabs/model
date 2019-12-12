@@ -7,132 +7,120 @@ import click
 
 from .. import entity
 from .. import graph as graph_manager
-from .. import model
-from .. import render
+from .. import model, render
 from .. import runtime as runtime_impl
-from .. import schema
-from .. import server
-from .. import store
+from .. import schema, server, store
+from .clicktools import spec, using
 
 cmd_name = __package__.split(".")[0]
 log = logging.getLogger(cmd_name)
 
 
-def add_options(options):
-    def _add_options(func):
-        for option in reversed(options):
-            func = option(func)
-        return func
+class ModelConfig:
+    def __init__(self):
+        self.store = store.Store()
 
-    return _add_options
+    def get_runtime(self, name=None):
+        if not name:
+            name = self.find("runtime")
+        return runtime_impl.resolve(name, self.store)
+
+    def get_environment(self, name=None):
+        if not name:
+            name = self.find("environment")
+        return self.store.qual_name[f"Environment:{name}"]
+
+    def find(self, name, ctx=None):
+        if not ctx:
+            ctx = click.get_current_context()
+        while ctx:
+            val = ctx.params.get(name)
+            if val:
+                return val
+            ctx = ctx.parent
+        raise KeyError(f"missing required param {name}")
+
+    def setup_logging(self):
+        logging.basicConfig(level=self.find("log_level"))
+
+    def load_configs(self):
+        for d in self.find("config_dir"):
+            schema.load_config(self.store, d)
+
+    def init(self):
+        self.setup_logging()
+        self.load_configs()
+        self.environment = self.get_environment()
+        # XXX: this should be per object in graph, not global
+        self.runtime = self.get_runtime()
 
 
-def setupLogging(level):
-    logging.basicConfig(level=level)
-
-
-def load_config(store, config_dir):
-    p = Path(config_dir)
-    if not p.exists() or not p.is_dir():
-        raise OSError("""No config directory -- post alpha this won't be required""")
-    for yml in sorted(p.rglob("*.yaml")):
-        log.debug(f"Loading config from {yml}")
-        schema.load_and_store(yml, store)
-    # Validate after all loading is done
-    for obj in store.qual_name.values():
-        obj.validate()
-
-
-def load_configs(store, dirs):
-    for d in dirs:
-        schema.load_config(store, d)
-
-
-common_args = [click.option("-c", "--config-dir", multiple=True, default="conf")]
-
-# def ensure(ctx, **kwargs):
-#    ctx.ensure_object(dict)
-
-# handlers = {
-#    None: ensure
-#    "log_level":
-# }
+common_args = [
+    spec("-l", "--log-level", default="INFO", type=str),
+    spec("-c", "--config-dir", multiple=True),
+]
 
 
 @click.group()
-@click.option("-l", "--log-level", type=str, default="INFO")
-@click.pass_context
-def main(ctx, log_level):
-    ctx.ensure_object(dict)
-    setupLogging(log_level.upper())
-    s = ctx.obj["store"] = store.Store()
+@using(ModelConfig, common_args)
+def main(config, **kwargs):
+    pass
 
 
 @main.command()
-@click.pass_context
+@using(ModelConfig, common_args)
 def init(ctx):
     print(f"Init {cmd_name}")
 
 
 @main.group()
-@click.pass_context
+@using(ModelConfig, common_args)
 def component(ctx):
     pass
 
 
 @component.command()
+@using(ModelConfig, common_args)
 @click.argument("src_ref", type=str)
-@click.pass_context
-def init(ctx, src_ref):
+def init(config, src_ref):
     # Mock impl. For now just write the changes to a known file
     print(f"init {src_ref}")
 
 
 graph_common = [
-    click.option("-e", "--environment"),
-    click.option("-r", "--runtime", default="kubernetes"),
+    spec("-e", "--environment"),
+    spec("-r", "--runtime", default="kubernetes"),
 ]
 
 
 @main.group()
-@add_options(common_args)
-@add_options(graph_common)
-@click.pass_context
-def graph(ctx, environment, runtime, config_dir):
-    s = ctx.obj["store"]
-    load_configs(s, config_dir)
-    ctx.obj["runtime"] = runtime_impl.resolve(runtime, s)
-    ctx.obj["environment"] = s.qual_name[f"Environment:{environment}"]
+@using(ModelConfig, common_args, graph_common)
+def graph(config, **kwargs):
+    pass
 
 
 @graph.command()
-@add_options(common_args)
-@add_options(graph_common)
-@click.pass_context
-def plan(ctx, **kwargs):
-    runtime = ctx.obj.get("runtime")
-    env = ctx.obj["environment"]
-    s = ctx.obj["store"]
-    graphs = s["kind"].get("Graph")
+@using(ModelConfig, common_args, graph_common)
+def plan(config, **kwargs):
+    config.init()
+    graphs = config.store["kind"].get("Graph")
     if not graphs:
         raise KeyError("No graphs to plan in config")
     graphs = graphs["name"].values()
     for graph in graphs:
-        graph = graph_manager.plan(graph, s, env, runtime)
+        graph = graph_manager.plan(
+            graph, config.store, config.environment, config.runtime
+        )
         print(f"plan graph {graph}")
-    log.debug(ctx.obj["store"])
 
 
 @graph.command()
-@add_options(graph_common)
+@using(ModelConfig, common_args, graph_common)
 @click.option("-o", "--output-dir", default="-")
 @click.option("-k", "--kustomize")
-@click.pass_context
-def apply(ctx, environment, runtime, output_dir, kustomize):
-    s = ctx.obj["store"]
-    runtime = ctx.obj.get("runtime")
-    graphs = s["kind"].get("Graph")
-    environment = ctx.obj["environment"]
+def apply(config, output_dir, kustomize, **kwargs):
+    config.init()
+    graphs = config.store["kind"].get("Graph")
     if not graphs:
         raise KeyError("No graphs to plan in config")
     graphs = graphs["name"].values()
@@ -148,29 +136,31 @@ def apply(ctx, environment, runtime, output_dir, kustomize):
         ren = render.DirectoryRenderer(output_dir)
 
     for graph in graphs:
-        graph = graph_manager.plan(graph, s, environment, runtime)
-        graph_manager.apply(graph, store, runtime, ren)
+        graph = graph_manager.plan(
+            graph, config.store, config.environment, config.runtime
+        )
+        graph_manager.apply(graph, config.store, config.runtime, ren)
 
     if kustomize:
         subprocess.run(f"kubectl kustomize {kustomize}", shell=True)
 
 
 @graph.command()
-@click.pass_context
-def develop(ctx):
+@using(ModelConfig, common_args)
+def develop(config, **kwargs):
+    config.init()
     # launch a development server for testing
-    s = ctx.obj["store"]
-    runtime = ctx.obj.get("runtime")
-    graphs = s["kind"].get("Graph")
+    graphs = config.store["kind"].get("Graph")
     if not graphs:
         raise KeyError("No graphs to serve in config")
     graph_ents = graphs["name"].values()
     graphs = []
     for graph in graph_ents:
-        graphs.append(graph_manager.plan(graph, s, runtime))
+        graphs.append(graph_manager.plan(graph, config.store, config.runtime))
     srv = server.Server(graphs)
     srv.serve_forever()
 
 
 if __name__ == "__main__":
-    main(auto_envvar_prefix="PULP")
+    obj = {"store": store.Store()}
+    main(prog_name="model", auto_envvar_prefix="MODEL", context_settings=obj)
