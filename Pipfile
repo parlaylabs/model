@@ -7,6 +7,7 @@ verify_ssl = true
 pytest = "*"
 black = "*"
 pytest-watch = "*"
+model = {editable = true,path = "."}
 
 [packages]
 pyyaml = "*"
