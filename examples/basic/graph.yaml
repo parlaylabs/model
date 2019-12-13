@@ -6,11 +6,11 @@ services:
     replicas: 1
   - name: mysql
   - name: redis
-  - name: nginx
+  - name: httpbin
+    expose: ["http"]
   - name: hello
     expose: ["http"]
     replicas: 1
 relations:
   - ["mysql:db", "ghost:db"]
   - ["redis:redis", "ghost:cache"]
-  - ["nginx:http_proxy", "ghost:http_proxy"]
