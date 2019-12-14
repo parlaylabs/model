@@ -5,7 +5,6 @@ services:
     expose: ["http"]
     replicas: 1
   - name: mysql
-  - name: redis
   - name: httpbin
     expose: ["http"]
   - name: hello
@@ -13,4 +12,3 @@ services:
     replicas: 1
 relations:
   - ["mysql:db", "ghost:db"]
-  - ["redis:redis", "ghost:cache"]

@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from typing import Any, Dict, List
 
 from . import entity
@@ -26,6 +26,9 @@ class GraphObj:
 
     def get(self, key, default=None):
         return self.entity.get(key, default)
+
+    def serialized(self):
+        return asdict(self)
 
 
 @dataclass
@@ -107,16 +110,36 @@ class Service(GraphObj):
 
 
 @dataclass
+class Interface(GraphObj):
+    name: str
+    kind: str = field(init=False, default="Interface")
+    version: str
+
+    @property
+    def qual_name(self):
+        return f"{self.name}:{self.version}"
+
+    def serialized(self):
+        return dict(
+            name=self.name,
+            kind=self.kind,
+            version=self.version,
+            defaults=self.entity.get("defaults"),
+            spec=self.entity.get("interface"),
+        )
+
+
+@dataclass
 class Endpoint:
     name: str
     kind: str = field(init=False, default="Endpoint")
     service: Service
-    interface: str
+    interface: Interface
     addresses: List[Dict[str, str]]
 
     @property
     def qual_name(self):
-        return f"{self.service.name}:{self.interface}"
+        return f"{self.service.name}:{self.name}"
 
     @property
     def ports(self):
@@ -134,7 +157,7 @@ class Endpoint:
             name=self.name,
             kind=self.kind,
             service=self.service.name,
-            interface=self.interface,
+            interface=self.interface.serialized(),
             addresses=self.addresses,
         )
 

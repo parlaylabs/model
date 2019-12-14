@@ -6,10 +6,10 @@ endpoints:
   - name: db
     interface: mysql:5.7
   - name: http
-    interface: http
+    interface: http:1.1
     addresses:
       - ports: [2368]
-  - name: cache
-    interface: redis:5
-  - name: http_proxy
-    interface: http_proxy:1
+#  - name: cache
+#    interface: redis:5
+#  - name: http_proxy
+#    interface: http_proxy:1

@@ -94,12 +94,17 @@ def load_and_store(fh, store):
 
 def load_config(store, config_dir):
     p = Path(config_dir)
-    if not p.exists() or not p.is_dir():
-        raise OSError("""No config directory -- post alpha this won't be required""")
-    for yml in sorted(p.rglob("*.yaml")):
-        log.debug(f"Loading config from {yml}")
-        load_and_store(yml, store)
-    # Validate after all loading is done
+    if not p.exists():
+        raise OSError(f"No config {p} -- post alpha this won't be required")
+    if p.is_dir():
+        for yml in sorted(p.rglob("*.yaml")):
+            log.debug(f"Loading config from {yml}")
+            load_and_store(yml, store)
+        # Validate after all loading is done
+    elif p.is_file():
+        load_and_store(p, store)
+    else:
+        raise OSError("Unsupported config file {p}")
     for obj in store.qual_name.values():
         obj.validate()
 

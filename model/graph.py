@@ -20,6 +20,7 @@ class Graph:
     entity: entity.Entity
     runtime: runtime_impl
     environment: model.Environment
+    interfaces: Dict[str, model.Interface]
 
     @property
     def name(self):
@@ -34,7 +35,7 @@ class Graph:
         return self.edges
 
     def serialized(self):
-        return dict(nodes=self.nodes, links=self.edges, model=self.model)
+        return dict(nodes=self.nodes, links=self.edges, model=self.entity)
 
     def __post_init__(self):
         # Inject the graph objects belong to so they can resolve other objects
@@ -49,47 +50,61 @@ def plan(graph_entity, store, environment, runtime=None):
     relations = {}
     components = {}
     interfaces = store.kind.get("Interface", {}).get("name", {})
+    interface_impls = {}
 
-    for comp_spec in graph_entity.get("services", []):
+    for ie in interfaces.values():
+        iface = model.Interface(
+            entity=ie, name=ie.name, version=ie.get("version", "latest")
+        )
+        interface_impls[iface.name] = iface
+
+    for service_spec in graph_entity.get("services", []):
         # ensure we have a component defintion for each entry
-        name = comp_spec.get("name")
-        comp = store["kind"]["Component"]["name"].get(name)
+        name = service_spec.get("name")
+        cname = service_spec.get("component", name)
+        comp = store["kind"]["Component"]["name"].get(cname)
         if not comp:
-            raise ValueError(f"graph references unknown component {comp_spec}")
+            raise ValueError(f"graph references unknown component {service_spec}")
 
         # Combine graph config with raw component data as a new facet on the entity
         # XXX: src could/should be a global graph reference
-        comp.add_facet(comp_spec, "<graph>")
+        comp.add_facet(service_spec, "<graph>")
         c_eps = comp.get("endpoints", [])
-        exposed = comp_spec.get("expose", [])
+        exposed = service_spec.get("expose", [])
         if exposed:
             for ep in exposed:
                 if not utils.pick(c_eps, name=ep):
                     raise ValueError(f"Unable to expose unknown endpoint {ep}")
 
         s = model.Service(
-            entity=comp, name=name, runtime=runtime, config=comp_spec.get("config", {}),
+            entity=comp,
+            name=name,
+            runtime=runtime,
+            config=service_spec.get("config", {}),
         )
 
         for ep in c_eps:
             # look up a known interface if it exists and use
             # its values as defaults
             addresses = ep.get("addresses", [])
+            iface_name, _, iface_version = ep["interface"].partition(":")
+            if iface_name not in interface_impls:
+                print(
+                    f"endpoint {ep} using unregistered interface {iface_name} for Service {s.name}"
+                )
+            # XXX: this would have to improve and be version aware if its
+            # going to work this way.
+            iface = interface_impls[iface_name]
+            defaults = iface.entity.get("defaults", {}).get("addresses").copy()
+            if not addresses:
+                addresses = defaults
+            else:
+                addresses = jsonmerge.merge(
+                    defaults, addresses, dict(mergeStrategy="arrayMergeByIndex"),
+                )
+            ep = s.add_endpoint(name=ep["name"], interface=iface, addresses=addresses)
+            log.debug(f"adding endpoint to service {s.name} {ep.qual_name}")
 
-            if ep["name"] in interfaces:
-                # XXX: this would have to improve and be version aware if its
-                # going to work this way.
-                iface = interfaces[ep["name"]].get("defaults", {})
-                defaults = iface.get("addresses").copy()
-                if not addresses:
-                    addresses = defaults
-                else:
-                    addresses = jsonmerge.merge(
-                        defaults, addresses, dict(mergeStrategy="arrayMergeByIndex"),
-                    )
-            s.add_endpoint(
-                name=ep["name"], interface=ep["interface"], addresses=addresses
-            )
         components[name] = comp
         services[s.name] = s
         store.add(s)
@@ -101,14 +116,14 @@ def plan(graph_entity, store, environment, runtime=None):
         ifaces = set()
         endpoints = []
         for ep_spec in relation:
-            cname, _, epname = ep_spec.partition(":")
-            c = store["kind"]["Component"]["name"][cname]
-            c_eps = c.get("endpoints", [])
-            # XXX: cname and service name will not be the same in the future
-            s = services[cname]
+            sname, _, epname = ep_spec.partition(":")
+            s = services[sname]
             ep = s.get_endpoint(name=epname)
-            log.debug(f"planning {ep_spec} {epname}")
-            ifaces.add(ep.interface)
+            if not ep:
+                log.warn(f"Unable to find endpoint {epname} for {relation} on {s.name}")
+            else:
+                log.debug(f"planned {ep_spec} for {relation} {ep}")
+            ifaces.add(ep.interface.qual_name)
             endpoints.append(ep)
         if len(ifaces) != 1:
             raise ValueError(
@@ -124,6 +139,7 @@ def plan(graph_entity, store, environment, runtime=None):
         edges=list(relations.values()),
         runtime=runtime,
         environment=environment,
+        interfaces=interface_impls,
     )
     # view(g)
     return g
