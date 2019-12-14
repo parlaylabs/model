@@ -41,7 +41,8 @@ class ModelConfig:
         raise KeyError(f"missing required param {name}")
 
     def setup_logging(self):
-        logging.basicConfig(level=self.find("log_level"))
+        logging.basicConfig(level=self.find("log_level").upper())
+        logging.getLogger("jsonmerge").setLevel(logging.WARNING)
 
     def load_configs(self):
         for d in self.find("config_dir"):
@@ -147,7 +148,8 @@ def apply(config, output_dir, kustomize, **kwargs):
 
 @graph.command()
 @using(ModelConfig, common_args)
-def develop(config, **kwargs):
+@click.option("--update/--no-update", default=False)
+def develop(config, update, **kwargs):
     config.init()
     # launch a development server for testing
     graphs = config.store["kind"].get("Graph")
@@ -158,7 +160,7 @@ def develop(config, **kwargs):
     for graph in graph_ents:
         graphs.append(graph_manager.plan(graph, config.store, config.runtime))
     srv = server.Server(graphs)
-    srv.serve_forever()
+    srv.serve_forever(store=config.store, update=update)
 
 
 if __name__ == "__main__":
