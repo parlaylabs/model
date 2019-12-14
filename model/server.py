@@ -39,7 +39,7 @@ class Server:
         await ws.prepare(request)
         request.app["websockets"].add(ws)
 
-        if not self.updater:
+        if self.updater is None:
             self.updater = asyncio.create_task(self.update_clients())
 
         # dump all graph state on client connect
@@ -87,7 +87,16 @@ class Server:
 
         asyncio.create_task(view())
 
-    def serve_forever(self):
+    async def get_interface(self, request):
+        name = request.match_info["name"]
+        interface = self.store.kind["Interface"]["name"][name]
+        return web.json_response(interface.serialized())
+
+    def serve_forever(self, store, update=False):
+        self.store = store
+        if update:
+            self.updater = True
+
         app = web.Application()
         app["websockets"] = set()
         app.on_startup.append(self.open_viewer)
@@ -96,6 +105,7 @@ class Server:
             [
                 web.get("/", self.index),
                 # web.request("/api/v1/service/<name>", self.update_service)
+                web.get("/api/v1/interface/{name}", self.get_interface),
                 web.get("/ws", self.handle),
             ]
         )
