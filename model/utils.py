@@ -1,4 +1,6 @@
 import copy
+import functools
+import itertools
 import json
 
 from collections import ChainMap
@@ -93,6 +95,25 @@ class MergingChainMap(ChainMap):
         while parts:
             r = jsonmerge.merge(r, parts.pop(0))
         return r
+
+
+def filter_select(item, **kwargs):
+    for k, expect in kwargs.items():
+        try:
+            v = item.get(k)
+        except (AttributeError, TypeError):
+            v = getattr(item, k, _marker)
+        if v != expect:
+            return False
+    return True
+
+
+def filter_iter(lst, reversed=False, predicate=filter_select, **kwargs):
+    selector = filter
+    if reversed:
+        selector = itertools.filterfalse
+    predicate = functools.partial(predicate, **kwargs)
+    return selector(predicate, lst)
 
 
 def pick(lst, default=None, **kwargs):
