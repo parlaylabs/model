@@ -20,7 +20,7 @@ $ pipenv shell
 >$ model graph -c examples/basic/ develop
 
 # To render the model 
->$ model appy -c examples/basic apply -o base
+>$ model graph  -c examples/basic apply -o base
 ```
 
 Model
