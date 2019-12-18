@@ -9,7 +9,3 @@ endpoints:
     interface: http:1.1
     addresses:
       - ports: [2368]
-#  - name: cache
-#    interface: redis:5
-#  - name: http_proxy
-#    interface: http_proxy:1
