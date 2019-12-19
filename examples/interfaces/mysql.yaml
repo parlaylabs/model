@@ -1,0 +1,18 @@
+kind: Interface
+name: mysql
+version: 5.7
+defaults:
+  addresses:
+    - ports: [3306]
+interface:
+  host: "{service.name}.{graph.name}.cluster.local"
+  port: "{service.ports[0]}"
+  # user and password are typically needed to connect, however there are no
+  # values for this which can be derived
+  user: null
+  password: null
+  # These can optional be provided by the interface to
+  # allow for the creation of custom schema/database/tables
+  admin_user: null
+  admin_password: null
+  # dsn?
