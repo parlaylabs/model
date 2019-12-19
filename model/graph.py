@@ -63,6 +63,9 @@ def plan(graph_entity, store, environment, runtime=None):
         name = service_spec.get("name")
         cname = service_spec.get("component", name)
         comp = store["kind"]["Component"]["name"].get(cname)
+        # Commonly config comes from the env object, not the graph but we support
+        # certain reuable configs none the less
+        config = service_spec.get("config", {})
         if not comp:
             raise ValueError(f"graph references unknown component {service_spec}")
 
@@ -76,12 +79,7 @@ def plan(graph_entity, store, environment, runtime=None):
                 if not utils.pick(c_eps, name=ep):
                     raise ValueError(f"Unable to expose unknown endpoint {ep}")
 
-        s = model.Service(
-            entity=comp,
-            name=name,
-            runtime=runtime,
-            config=service_spec.get("config", {}),
-        )
+        s = model.Service(entity=comp, name=name, runtime=runtime, config=config)
 
         for ep in c_eps:
             # look up a known interface if it exists and use

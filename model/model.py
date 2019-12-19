@@ -1,6 +1,8 @@
 from dataclasses import dataclass, field, asdict
 from typing import Any, Dict, List
 
+import jsonmerge
+
 from . import entity
 from . import schema
 from . import utils
@@ -87,6 +89,11 @@ class Service(GraphObj):
         return self.entity.get("expose", [])
 
     @property
+    def exposed_endpoints(self):
+        for ex in self.exposed:
+            yield self.get_endpoint(name=ex)
+
+    @property
     def ports(self):
         ports = set()
         for ep in self.endpoints:
@@ -102,11 +109,22 @@ class Service(GraphObj):
         return dict(
             name=self.name,
             kind=self.kind,
-            endpoints=self.endpoints,
-            config=self.config,
-            # XXX: temporary
-            status=getattr(self, "status", None),
+            endpoints=[e.serialized() for e in self.endpoints],
+            config=self.full_config,
         )
+
+    @property
+    def full_config(self):
+        # There might be config for the service in either/both the graph and the environment.
+        # The env will take priority as the graph object can be reusable but the env contains
+        # specific overrides.
+
+        env_config = self.graph.environment.get("config", {})
+        service_config = env_config.get("services", {}).get(self.name, {})
+        composed = jsonmerge.merge(self.config, service_config)
+        context = dict(service=self, this=self)
+        context.update(composed)
+        return utils.interpolate(composed, context)
 
 
 @dataclass

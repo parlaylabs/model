@@ -50,7 +50,32 @@ class Kubernetes:
             kind="Namespace",
             metadata=dict(name=graph.name, labels={}),
         )
-        output.add(f"00-{graph.name}-namespace.yaml", ns, self, graph=graph)
+        nsfn = f"00-{graph.name}-namespace.yaml"
+        if nsfn not in output:
+            output.add(nsfn, ns, self, graph=graph)
+
+        # XXX: This must become the full context, see Kustomize.render_service notes for the change
+        config_map = {
+            "apiVersion": "v1",
+            "kind": "ConfigMap",
+            "metadata": {
+                "namespace": graph.name,
+                "name": f"{service.name}-config",
+                "labels": labels,
+            },
+            # TODO: build context from data
+            # this should include the local service config
+            # and mappings for each connected relationship
+            # with the information provided by the interface
+            "data": service.serialized(),
+        }
+        output.add(
+            f"configs/10-{graph.name}-{service.name}-config.yaml",
+            config_map,
+            self,
+            service=service,
+            graph=graph,
+        )
 
         pod_labels = {
             "app": service.name,
@@ -81,8 +106,18 @@ class Kubernetes:
                                 "imagePullPolicy": "IfNotPresent",
                                 "ports": dports,
                                 "env": senv,
+                                "volume-mounts": [
+                                    {"name": "model-config", "mountPath": "/etc/model"},
+                                ],
                             },
                         ],
+                        "volumes": [
+                            {
+                                "name": "model-config",
+                                # XXX: not using kustomize generator name
+                                "configMap": {"name": config_map["metadata"]["name"],},
+                            }
+                        ]
                         # see https://kubernetes.io/docs/concepts/workloads/pods/pod-topology-spread-constraints/#spread-constraints-for-pods
                         # "topologySpreadConstraints": [
                         #    {
@@ -96,7 +131,13 @@ class Kubernetes:
             },
         }
 
-        output.add(f"{service.name}-deployment.yaml", deployment, self, service=service)
+        output.add(
+            f"40-{service.name}-deployment.yaml",
+            deployment,
+            self,
+            service=service,
+            graph=graph,
+        )
 
         # next push out a service object
         ports = []
@@ -116,7 +157,9 @@ class Kubernetes:
                 # https://kubernetes.io/docs/concepts/services-networking/service/#aws-nlb-support
             },
         }
-        output.add(f"{service.name}-service.yaml", serviceSpec, self, service=service)
+        output.add(
+            f"50-{service.name}-service.yaml", serviceSpec, self, service=service
+        )
 
 
 @register
@@ -140,7 +183,7 @@ class Istio:
             "apiVersion": "networking.istio.io/v1alpha3",
             "metadata": {"name": "ingressgateway", "namespace": "istio-system",},
         }
-        output.add(f"ingressgateway.yaml", gateway, self)
+        output.add(f"02-ingressgateway.yaml", gateway, self)
 
     def fini(self, graph, output):
         ns_out = f"00-{graph.name}-namespace.yaml"
@@ -155,8 +198,7 @@ class Istio:
             return
 
         public_dns = graph.environment.config["public_dns"]
-        for ex in exposed:
-            ep = service.get_endpoint(name=ex)
+        for ep in service.exposed_endpoints:
             vs = {
                 "apiVersion": "networking.istio.io/v1alpha3",
                 "kind": "VirtualService",
@@ -183,7 +225,7 @@ class Istio:
                 "metadata": {"namespace": graph.name, "name": service.name,},
             }
             output.add(
-                f"{service.name}-{ep.name}-virtualservice.yaml",
+                f"60-{service.name}-{ep.name}-virtualservice.yaml",
                 vs,
                 self,
                 service=service,
@@ -194,15 +236,41 @@ class Istio:
 @dataclass
 class Kustomize:
     name: str = field(init=False, default="Kustomize")
+    fn = "kustomization.yaml"
+
+    def init(self, graph, output):
+        output.add(self.fn, {"resources": [], "configMapGenerator": []}, self)
+
+    def render_service(self, service, graph, output):
+        # For each service we inject a config-map for use in configuring
+        # the k8s deployment pods as a volume. To support this we must create
+        # a configmapgenerator in the kustomize file. This is because the
+        # accepted pattern for updating a configmap is to render a new
+        # one and update the deployments reference to it.
+        # The Kubernetes plugin should have registered a config map to
+        # the output.
+        context = dict(
+            name=f"{service.name}-config",
+            files=[f"configs/10-{graph.name}-{service.name}-config.yaml"],
+        )
+
+        output.update(
+            self.fn,
+            data={"data.configMapGenerator": [context]},
+            plugin=self,
+            schema={"mergeStrategy": "append"},
+        )
 
     def fini(self, graph, output):
         # XXX: temp workaround till we assign outputs to layers
         if isinstance(output, render.FileRenderer):
             return
         # Render a kustomize resource file into what we presume to be a base dir
-        output.add(
-            "kustomization.yaml", {"resources": sorted(output.index.keys())}, self
-        )
+        files = [
+            e.name for e in sorted(output.filter(plugin=self), key=lambda x: x.name)
+        ]
+        files = list(filter(lambda x: not x.startswith("configs/"), files))
+        output.update(self.fn, {"data.resources": files}, self)
 
 
 @dataclass
