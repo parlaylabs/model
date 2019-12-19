@@ -16,6 +16,8 @@ click = "*"
 graphviz = "*"
 aiohttp = "*"
 jsonmerge = "*"
+jmespath = "*"
+jedi = "*"
 
 [requires]
 python_version = "3.7"

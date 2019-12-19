@@ -10,6 +10,7 @@ from .. import graph as graph_manager
 from .. import model, render
 from .. import runtime as runtime_impl
 from .. import schema, server, store
+from .. import utils
 from .clicktools import spec, using
 
 cmd_name = __package__.split(".")[0]
@@ -26,8 +27,15 @@ class ModelConfig:
         return runtime_impl.resolve(name, self.store)
 
     def get_environment(self, name=None):
-        if not name:
-            name = self.find("environment")
+        envs = list(self.store.kind["Environment"]["name"].keys())
+        if len(envs) == 1:
+            if name and envs[0] != name:
+                log.warning(f"Requesting env {name} but only {envs} are configured")
+            name = envs[0]
+            log.debug(f"Using only provided environment {name} for config")
+        else:
+            if not name:
+                name = self.find("environment")
         return self.store.qual_name[f"Environment:{name}"]
 
     def find(self, name, ctx=None):
@@ -57,8 +65,18 @@ class ModelConfig:
 
 
 common_args = [
-    spec("-l", "--log-level", default="INFO", type=str),
-    spec("-c", "--config-dir", multiple=True),
+    spec(
+        "-l",
+        "--log-level",
+        default="INFO",
+        type=click.Choice(["DEBUG", "INFO", "WARNING", "CRITICAL"]),
+    ),
+    spec(
+        "-c",
+        "--config-dir",
+        multiple=True,
+        type=click.Path(exists=True, file_okay=True, dir_okay=True, readable=True),
+    ),
 ]
 
 
@@ -110,7 +128,7 @@ def plan(config, **kwargs):
     graphs = graphs["name"].values()
     for graph in graphs:
         graph = graph_manager.plan(
-            graph, config.store, config.environment, config.runtime
+            graph, config.store, environment=config.environment, runtime=config.runtime
         )
         print(f"plan graph {graph}")
 
@@ -118,7 +136,7 @@ def plan(config, **kwargs):
 @graph.command()
 @using(ModelConfig, common_args, graph_common)
 @click.option("-o", "--output-dir", default="-")
-@click.option("-k", "--kustomize")
+@click.option("-k", "--kustomize", type=bool, default=False)
 def apply(config, output_dir, kustomize, **kwargs):
     config.init()
     graphs = config.store["kind"].get("Graph")
@@ -138,12 +156,12 @@ def apply(config, output_dir, kustomize, **kwargs):
 
     for graph in graphs:
         graph = graph_manager.plan(
-            graph, config.store, config.environment, config.runtime
+            graph, config.store, environment=config.environment, runtime=config.runtime
         )
         graph_manager.apply(graph, config.store, config.runtime, ren)
 
     if kustomize:
-        subprocess.run(f"kubectl kustomize {kustomize}", shell=True)
+        subprocess.run(f"kubectl kustomize {output_dir}", shell=True)
 
 
 @graph.command()
@@ -158,9 +176,54 @@ def develop(config, update, **kwargs):
     graph_ents = graphs["name"].values()
     graphs = []
     for graph in graph_ents:
-        graphs.append(graph_manager.plan(graph, config.store, config.runtime))
+        graphs.append(
+            graph_manager.plan(
+                graph,
+                store=config.store,
+                runtime=config.runtime,
+                environment=config.environment,
+            )
+        )
     srv = server.Server(graphs)
     srv.serve_forever(store=config.store, update=update)
+
+
+@graph.command()
+@using(ModelConfig, common_args, graph_common)
+def shell(config, **kwargs):
+    import code
+    from jedi.utils import setup_readline
+
+    config.init()
+    # launch a development server for testing
+    graphs = config.store["kind"].get("Graph")
+    if not graphs:
+        raise KeyError("No graphs to serve in config")
+    graph_ents = graphs["name"].values()
+    graphs = []
+    for graph in graph_ents:
+        graphs.append(
+            graph_manager.plan(
+                graph,
+                store=config.store,
+                runtime=config.runtime,
+                environment=config.environment,
+            )
+        )
+
+    ns = {
+        "graphs": graphs,
+        "store": config.store,
+        "config": config,
+        "dump": lambda x: print(utils.dump(x)),
+    }
+
+    class O:
+        def __init__(self, ns):
+            self.__dict__ = ns
+
+    setup_readline(O(ns))
+    code.interact("model interactive shell", local=ns)
 
 
 if __name__ == "__main__":
