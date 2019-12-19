@@ -15,6 +15,35 @@ def test_filter_iter_take():
 
 
 def test_filter_iter_drop():
-    r = list(utils.filter_iter(filter_data, True, name="foo"))
+    r = list(utils.filter_iter(filter_data, reversed=True, name="foo"))
     assert r[0] == filter_data[1]
     assert r[1] == filter_data[2]
+
+
+def test_merge_path():
+    sample = {
+        "this": {"that": {"foo": "bar", "baz": "whatever"}, "high": "low"},
+        "one": 2,
+    }
+    utils.merge_path(sample, "this.that", dict(foo="fofofo", new="true"))
+
+    r = utils.nested_get(sample, "this.that")
+    assert r["foo"] == "fofofo"
+    assert r["baz"] == "whatever"
+    assert r["new"] == "true"
+
+
+def test_merge_paths():
+    sample = {
+        "this": {"that": {"foo": "bar", "baz": "whatever"}, "high": "low"},
+        "one": 2,
+    }
+    utils.merge_paths(
+        sample, {"this.that": dict(foo="fofofo", new="true"), "this.high": "low"}
+    )
+
+    r = utils.nested_get(sample, "this.that")
+    assert r["foo"] == "fofofo"
+    assert r["baz"] == "whatever"
+    assert r["new"] == "true"
+    assert utils.nested_get(sample, "this.high") == "low"
