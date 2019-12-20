@@ -55,22 +55,9 @@ class Kubernetes:
             output.add(nsfn, ns, self, graph=graph)
 
         # XXX: This must become the full context, see Kustomize.render_service notes for the change
-        config_map = {
-            "apiVersion": "v1",
-            "kind": "ConfigMap",
-            "metadata": {
-                "namespace": graph.name,
-                "name": f"{service.name}-config",
-                "labels": labels,
-            },
-            # TODO: build context from data
-            # this should include the local service config
-            # and mappings for each connected relationship
-            # with the information provided by the interface
-            "data": service.serialized(),
-        }
+        config_map = service.serialized()
         output.add(
-            f"configs/10-{graph.name}-{service.name}-config.yaml",
+            f"configs/{graph.name}-{service.name}-config.yaml",
             config_map,
             self,
             service=service,
@@ -97,6 +84,7 @@ class Kubernetes:
                 "template": {
                     "metadata": {"labels": pod_labels},
                     "spec": {
+                        "restartPolicy": "Always",
                         "containers": [
                             # XXX: join with context/runtime container registry
                             # XXX: model and support cross cutting concerns here
@@ -108,6 +96,7 @@ class Kubernetes:
                                 "env": senv,
                                 "volume-mounts": [
                                     {"name": "model-config", "mountPath": "/etc/model"},
+                                    {"name": "podinfo", "mountPath": "/etc/podinfo"},
                                 ],
                             },
                         ],
@@ -115,9 +104,31 @@ class Kubernetes:
                             {
                                 "name": "model-config",
                                 # XXX: not using kustomize generator name
-                                "configMap": {"name": config_map["metadata"]["name"],},
-                            }
-                        ]
+                                "configMap": {
+                                    "name": f"{service.name}-config",
+                                    "namespace": graph.name,
+                                },
+                            },
+                            {
+                                "name": "podinfo",
+                                "downwardAPI": {
+                                    "items": [
+                                        {
+                                            "path": "labels",
+                                            "fieldRef": {
+                                                "fieldPath": "metadata.labels",
+                                            },
+                                        },
+                                        {
+                                            "path": "annotations",
+                                            "fieldRef": {
+                                                "fieldPath": "metadata.annotations",
+                                            },
+                                        },
+                                    ],
+                                },
+                            },
+                        ],
                         # see https://kubernetes.io/docs/concepts/workloads/pods/pod-topology-spread-constraints/#spread-constraints-for-pods
                         # "topologySpreadConstraints": [
                         #    {
@@ -251,7 +262,8 @@ class Kustomize:
         # the output.
         context = dict(
             name=f"{service.name}-config",
-            files=[f"configs/10-{graph.name}-{service.name}-config.yaml"],
+            namespace=graph.name,
+            files=[f"configs/{graph.name}-{service.name}-config.yaml"],
         )
 
         output.update(
