@@ -31,7 +31,7 @@ class Kubernetes:
         # XXX: ServiceAccountName
         dports = []
         for p in ports:
-            dports.append(dict(containerPort=int(p), protocol="TCP"))
+            dports.append(dict(containerPort=int(p["port"]), protocol="TCP"))
 
         sconfig = graph.environment.config.get("services", {}).get(service.name, {})
         senv = sconfig.get("environment", [])
@@ -94,7 +94,7 @@ class Kubernetes:
                                 "imagePullPolicy": "IfNotPresent",
                                 "ports": dports,
                                 "env": senv,
-                                "volume-mounts": [
+                                "volumeMounts": [
                                     {"name": "model-config", "mountPath": "/etc/model"},
                                     {"name": "podinfo", "mountPath": "/etc/podinfo"},
                                 ],
@@ -104,10 +104,7 @@ class Kubernetes:
                             {
                                 "name": "model-config",
                                 # XXX: not using kustomize generator name
-                                "configMap": {
-                                    "name": f"{service.name}-config",
-                                    "namespace": graph.name,
-                                },
+                                "configMap": {"name": f"{service.name}-config",},
                             },
                             {
                                 "name": "podinfo",
@@ -155,7 +152,10 @@ class Kubernetes:
         for p in service.ports:
             # XXX: static protocol, pull from endpoint
             # XXX: use named targetPort from pod definition
-            ports.append({"protocol": "TCP", "port": int(p)})
+            # ports need a unique name when there is more than one
+            # for this reason we must include the endpoint name
+            # TODO: support UDP and others as needed
+            ports.append({"protocol": "TCP", "name": p["name"], "port": int(p["port"])})
         serviceSpec = {
             "apiVersion": "v1",
             "kind": "Service",

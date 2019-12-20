@@ -97,6 +97,7 @@ def plan(graph_entity, store, environment, runtime=None):
             if not addresses:
                 addresses = defaults
             else:
+                # XXX: use arrayMergeById and idRef=/name
                 addresses = jsonmerge.merge(
                     defaults, addresses, dict(mergeStrategy="arrayMergeByIndex"),
                 )

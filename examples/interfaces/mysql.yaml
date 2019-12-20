@@ -6,7 +6,8 @@ defaults:
     - ports: [3306]
 interface:
   host: "{service.name}.{graph.name}.cluster.local"
-  port: "{service.ports[0]}"
+  port: "{service.ports[0][port]}"
+
   # user and password are typically needed to connect, however there are no
   # values for this which can be derived
   user: null

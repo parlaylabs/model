@@ -95,14 +95,13 @@ class Service(GraphObj):
 
     @property
     def ports(self):
-        ports = set()
+        ports = []
         for ep in self.endpoints:
             for address in ep.addresses:
                 if "ports" in address:
                     for port in address["ports"]:
-                        ports.add(str(port))
-        ports = list(ports)
-        ports.sort()
+                        ports.append(dict(name=ep.name, port=str(port)))
+        ports.sort(key=lambda x: x["name"])
         return ports
 
     def serialized(self):
