@@ -109,9 +109,15 @@ class Service(GraphObj):
         return dict(
             name=self.name,
             kind=self.kind,
-            endpoints=[e.serialized() for e in self.endpoints],
+            relations=self.full_relations,
+            # endpoints=[e.serialized() for e in self.endpoints],
             config=self.full_config,
         )
+
+    @property
+    def full_relations(self):
+        context = dict(service=self, this=self, graph=self.graph)
+        return utils.interpolate(self.relations, context)
 
     @property
     def full_config(self):
@@ -193,4 +199,9 @@ class Relation:
     qual_name = name
 
     def serialized(self):
-        return dict(kind=self.kind, name=self.name, endpoints=self.endpoints)
+        return dict(
+            kind=self.kind,
+            name=self.name,
+            endpoints=[e.serialized() for e in self.endpoints],
+        )
+

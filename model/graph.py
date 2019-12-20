@@ -113,6 +113,7 @@ def plan(graph_entity, store, environment, runtime=None):
         # endpoint's interface is compatable (the same for now)
         ifaces = set()
         endpoints = []
+        rel_services = []
         for ep_spec in relation:
             sname, _, epname = ep_spec.partition(":")
             s = services[sname]
@@ -129,6 +130,9 @@ def plan(graph_entity, store, environment, runtime=None):
             )
         r = model.Relation(endpoints=endpoints)
         relations[r.name] = r
+        # link the service and relation
+        for ep in endpoints:
+            ep.service.relations.append(r)
         store.add(r)
 
     g = Graph(
