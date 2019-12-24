@@ -49,10 +49,9 @@ def plan(graph_entity, store, environment, runtime=None):
     services = {}
     relations = {}
     components = {}
-    interfaces = store.kind.get("Interface", {}).get("name", {})
     interface_impls = {}
 
-    for ie in interfaces.values():
+    for ie in store.interface.values():
         iface = model.Interface(
             entity=ie, name=ie.name, version=ie.get("version", "latest")
         )
@@ -62,7 +61,7 @@ def plan(graph_entity, store, environment, runtime=None):
         # ensure we have a component defintion for each entry
         name = service_spec.get("name")
         cname = service_spec.get("component", name)
-        comp = store["kind"]["Component"]["name"].get(cname)
+        comp = store.component.get(cname)
         # Commonly config comes from the env object, not the graph but we support
         # certain reuable configs none the less
         config = service_spec.get("config", {})
@@ -74,13 +73,11 @@ def plan(graph_entity, store, environment, runtime=None):
         comp.add_facet(service_spec, "<graph>")
         c_eps = comp.get("endpoints", [])
         exposed = service_spec.get("expose", [])
-        if exposed:
-            for ep in exposed:
-                if not utils.pick(c_eps, name=ep):
-                    raise ValueError(f"Unable to expose unknown endpoint {ep}")
+        for ep in exposed:
+            if not utils.pick(c_eps, name=ep):
+                raise ValueError(f"Unable to expose unknown endpoint {ep}")
 
         s = model.Service(entity=comp, name=name, runtime=runtime, config=config)
-
         for ep in c_eps:
             # look up a known interface if it exists and use
             # its values as defaults
@@ -92,7 +89,7 @@ def plan(graph_entity, store, environment, runtime=None):
                 )
             # XXX: this would have to improve and be version aware if its
             # going to work this way.
-            iface = interface_impls[iface_name]
+            iface = interface_impls.get(iface_name, {})
             defaults = iface.entity.get("defaults", {}).get("addresses").copy()
             if not addresses:
                 addresses = defaults
@@ -118,7 +115,7 @@ def plan(graph_entity, store, environment, runtime=None):
         for ep_spec in relation:
             sname, _, epname = ep_spec.partition(":")
             s = services[sname]
-            ep = s.get_endpoint(name=epname)
+            ep = s.endpoints[epname]
             if not ep:
                 log.warn(f"Unable to find endpoint {epname} for {relation} on {s.name}")
             else:

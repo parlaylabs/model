@@ -38,4 +38,3 @@ def using(configObj, *cmds):
         return click.make_pass_decorator(configObj, True)(f)
 
     return decorator
-

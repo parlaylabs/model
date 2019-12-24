@@ -76,12 +76,10 @@ def load_and_store(fh, store):
     try:
         for obj in yaml.safe_load_all(fp):
             # blindly assume we have a dict here
-            kind = obj["kind"]
-            name = obj["name"]
-            qual_name = f"{kind}:{name}"
-            schema, cls = lookup(kind)
-            if qual_name in store.qual_name:
-                e = store.qual_name[qual_name]
+            obj = utils.AttrAccess(obj)
+            e = utils.prop_get(store, f"{obj.kind}.{obj.name}".lower(), None)
+            schema, cls = lookup(obj.kind)
+            if e is not None:
                 e.add_facet(obj, fp.name)
             else:
                 e = entity.Entity.from_schema(obj, schema, fp.name)
@@ -105,7 +103,7 @@ def load_config(store, config_dir):
         load_and_store(p, store)
     else:
         raise OSError("Unsupported config file {p}")
-    for obj in store.qual_name.values():
+    for obj in store:
         obj.validate()
 
 

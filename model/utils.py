@@ -17,37 +17,36 @@ class AttrAccess(dict):
     def __getattr__(self, key):
         v = self[key]
         if isinstance(v, dict):
-            v = AttrAccess(v)
+            v = self.__class__(v)
         return v
 
     def __getitem__(self, key):
         v = super().__getitem__(key)
         if isinstance(v, dict):
-            v = AttrAccess(v)
+            v = self.__class__(v)
         return v
 
+    def __setattr__(self, key, value):
+        self[key] = value
 
-def nested_get(obj, path, default=None, sep="."):
-    if not path:
-        return obj
-    o = obj
-    for part in path.split(sep):
-        try:
-            o = getattr(o, part)
-        except AttributeError:
-            if part not in o:
-                return default
-            o = o[part]
-    return o
+    def serialized(self):
+        return dict(self)
 
 
-def nested_set(obj, path, value, sep="."):
+def nested_get(obj, path=None, default=None):
+    try:
+        return jmespath.search(path, obj)
+    except IndexError:
+        return default
+
+
+def nested_set(obj, path, value):
     if not path:
         o = obj
         key = path
-    parts = path.split(sep)
+    parts = path.split(".")
     key = parts.pop()
-    o = nested_get(obj, sep.join(parts), sep=sep)
+    o = prop_get(obj, ".".join(parts))
     if isinstance(o, dict) or hasattr(o, "__setitem__"):
         o[key] = value
     else:
@@ -69,9 +68,8 @@ def merge_paths(obj, overrides, schema=None):
     """
     if schema is None:
         schema = {}
-
     for expr, data in overrides.items():
-        o = nested_get(obj, expr)
+        o = prop_get(obj, expr)
         result = jsonmerge.merge(o, data, schema=schema)
         nested_set(obj, expr, result)
     return obj
@@ -126,32 +124,89 @@ def interpolate(data, data_context=None):
     return result
 
 
-class MergingChainMap(ChainMap):
-    def __getitem__(self, key):
-        parts = []
-        for mapping in self.maps:
-            try:
-                v = mapping[key]
-                parts.insert(0, v)
-            except KeyError:
-                pass
-        if not parts:
-            return self.__missing__(key)
-        # Deep merge the components so last write wins
-        # we do insert 0 above so we can use natural orderin here
-        if len(parts) == 1:
-            # fast path
-            return parts[0]
+def window(seq, n=2):
+    "Returns a sliding window (of width n) over data from the iterable"
+    "   s -> (s0,s1,...s[n-1]), (s1,s2,...,sn), ...                   "
+    it = iter(seq)
+    result = tuple(itertools.islice(it, n))
+    if len(result) == n:
+        yield result
+    for elem in it:
+        result = result[1:] + (elem,)
+        yield result
+
+
+class MergingChainMap(dict):
+    def __init__(self, data=None, **kwargs):
+        super().__init__()
+        if data is not None:
+            data = dict(data)
+        else:
+            data = {}
+        data.update(kwargs)
+        self._maps = [data]
+        self._update()
+
+    def new_child(self, data=None):
+        if data is None:
+            data = {}
+        self._maps.insert(0, dict(data))
+        self._update()
+        return self
+
+    def remove_child(self):
+        if len(self._maps) > 1:
+            self._maps.pop(0)
+            self._update()
+        return self
+
+    def __enter__(self):
+        self.new_child()
+        return self
+
+    def __exit__(self, ex_type, value, tb):
+        if value:
+            raise value.__with_traceback__(tb)
+
+    def __setitem__(self, key, value):
+        self._maps[0][key] = value
+        self._update()
+
+    def update(self, data):
+        self._maps[0].update(dict(data))
+        self._update()
+        return self
+
+    def _update(self):
+        if len(self._maps) == 1:
+            self.clear()
+            super().update(self._maps[0])
+            return
         r = {}
-        while parts:
-            r = jsonmerge.merge(r, parts.pop(0))
-        return r
+        for m in reversed(self._maps):
+            r = jsonmerge.merge(r, m)
+        self.clear()
+        super().update(r)
+
+
+def prop_get(obj, path, default=None, sep="."):
+    if not path:
+        return obj
+    o = obj
+    for part in path.split(sep):
+        try:
+            o = getattr(o, part)
+        except (AttributeError, KeyError):
+            if part not in o:
+                return default
+            o = o[part]
+    return o
 
 
 def filter_select(item, query):
     for k, expect in query.items():
         try:
-            v = nested_get(item, k)
+            v = prop_get(item, k)
         except (AttributeError, TypeError):
             v = getattr(item, k, _marker)
         if v != expect:
@@ -176,17 +231,10 @@ def pick(lst, query=None, default=None, **kwargs):
         query.update(kwargs)
 
     for item in lst:
-        match = True
-        for k, expect in query.items():
-            try:
-                v = nested_get(item, k)
-            except (AttributeError, TypeError):
-                v = getattr(item, k, _marker)
-            if v != expect:
-                match = False
-                continue
-        if match:
-            return item
+        r = filter_select(item, query)
+        if not r:
+            continue
+        return item
     return default
 
 

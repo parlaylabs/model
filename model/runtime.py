@@ -239,6 +239,7 @@ class Istio:
                 f"60-{service.name}-{ep.name}-virtualservice.yaml",
                 vs,
                 self,
+                endpoint=ep,
                 service=service,
             )
 
@@ -285,11 +286,11 @@ class Kustomize:
         output.update(self.fn, {"data.resources": files}, self)
 
 
-@dataclass
+@dataclass(unsafe_hash=True)
 class RuntimeImpl:
-    name: str
-    kind: str = field(init=False, default="RuntimeImpl")
-    plugins: List[RuntimePlugin]
+    name: str = field(hash=True)
+    kind: str = field(init=False, hash=True, default="RuntimeImpl")
+    plugins: List[RuntimePlugin] = field(hash=False)
 
     @property
     def qual_name(self):
@@ -334,7 +335,7 @@ def resolve(runtime_name, store):
     # Look for a runtime entry in the store
     if runtime_name in _runtimes:
         return _runtimes[runtime_name]
-    rspec = store.qual_name[f"Runtime:{runtime_name}"]
+    rspec = store.runtime[runtime_name]
     plugins = resolve_each(rspec.plugins)
     runtime = RuntimeImpl(runtime_name, plugins=plugins)
     _runtimes[runtime_name] = runtime

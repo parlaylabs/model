@@ -5,6 +5,7 @@ import yaml
 
 from collections import ChainMap
 
+import jmespath
 import jsonmerge
 from jsonschema import validate
 from jsonschema.exceptions import ValidationError
@@ -32,19 +33,18 @@ class Entity:
         self.__data = utils.MergingChainMap()
         self.schema = schema
         self.src_ref = []
-        if data:
+        if data is not None:
             self.add_facet(data, src_ref)
 
     def __str__(self):
         return utils.dump(self.serialized())
 
     def add_facet(self, data, src_ref):
-        self.__data = self.__data.new_child(data)
+        self.__data.new_child(data)
         self.src_ref.append(src_ref)
 
-    @property
-    def qual_name(self):
-        return f"{self['kind']}:{self['name']}"
+    def __hash__(self):
+        return hash((self.__data["name"], self.__data["kind"]))
 
     @classmethod
     def from_schema(cls, data, schema, src_ref=None):
@@ -66,7 +66,6 @@ class Entity:
             self.schema.validate(self.__data)
         return self
 
-    @property
     def valid(self):
         try:
             self.validate()
@@ -76,11 +75,7 @@ class Entity:
         return True
 
     def __getitem__(self, key):
-        p = key.split(".")
-        o = self.__data
-        for k in p:
-            o = o[k]
-        return o
+        return utils.prop_get(self.__data, key)
 
     def __getattr__(self, key):
         val = self.__data.get(key, _marker)
@@ -92,16 +87,13 @@ class Entity:
         return other.serialized() == self.serialized()
 
     def get(self, key, default=None):
-        try:
-            return self[key]
-        except KeyError:
-            return default
+        return utils.prop_get(self.__data, key, default)
 
     def __repr__(self):
         ref = ""
         if self.src_ref:
             ref = f"@{self.src_ref}"
-        return f"<Entity {self.qual_name} {self.serialized()}{ref}>"
+        return f"<Entity {self.kind}::{self.name} {self.serialized()}{ref}>"
 
     @property
     def data(self):

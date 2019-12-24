@@ -10,8 +10,8 @@ from . import utils
 
 @dataclass
 class GraphObj:
-    kind: str
-    name: str
+    kind: str = field(hash=True)
+    name: str = field(hash=True)
     entity: entity.Entity
     namespace: str = field(init=False, default="default")
     graph: "GraphObj" = field(init=False, default=None)
@@ -32,6 +32,9 @@ class GraphObj:
     def serialized(self):
         return asdict(self)
 
+    def __hash__(self):
+        return hash((self.name, self.kind))
+
 
 @dataclass
 class Runtime(GraphObj):
@@ -45,6 +48,9 @@ class Runtime(GraphObj):
         # XXX: bad shortcut
         return self.graph.qual_name[f"RuntimeImpl:{self.name}"]
 
+    def __hash__(self):
+        return hash((self.name, self.kind))
+
 
 @schema.register_class
 @dataclass
@@ -55,9 +61,12 @@ class Environment(GraphObj):
     def config(self):
         return self.entity.get("config", {})
 
+    def __hash__(self):
+        return hash((self.name, self.kind))
+
 
 @schema.register_class
-@dataclass
+@dataclass(unsafe_hash=True)
 class Component(GraphObj):
     name: str
     kind: str = field(init=False, default="Component")
@@ -67,19 +76,27 @@ class Component(GraphObj):
 
 @dataclass
 class Service(GraphObj):
-    kind: str = field(init=False, default="Service")
-    endpoints: List["Endpoint"] = field(init=False, default_factory=list)
+    kind: str = field(init=False, hash=True, default="Service")
+    endpoints: Dict[str, "Endpoint"] = field(
+        init=False, default_factory=utils.AttrAccess
+    )
     relations: List = field(init=False, default_factory=list)
     runtime: Runtime
     # TODO: this can be in init and draw config from the graph
     config: Dict[str, Any] = field(default_factory=dict)
 
+    def __hash__(self):
+        return hash((self.name, self.kind))
+
     def add_endpoint(self, name, interface, addresses=None):
         ep = Endpoint(name=name, interface=interface, service=self, addresses=addresses)
-        self.endpoints.append(ep)
+        self.endpoints[name] = ep
         return ep
 
-    def get_endpoint(self, **kwargs):
+    def get_remote_endpoint(self, epname):
+        this = self.endpoints[epname]
+        # scan the relations to and return the (relation, endpoint) pair
+
         return utils.pick(self.endpoints, **kwargs)
 
     @property
@@ -91,12 +108,16 @@ class Service(GraphObj):
     @property
     def exposed_endpoints(self):
         for ex in self.exposed:
-            yield self.get_endpoint(name=ex)
+            yield self.endpoints[ex]
+
+    @property
+    def get_environment(self):
+        pass
 
     @property
     def ports(self):
         ports = []
-        for ep in self.endpoints:
+        for ep in self.endpoints.values():
             for address in ep.addresses:
                 if "ports" in address:
                     for port in address["ports"]:
@@ -138,16 +159,19 @@ class Interface(GraphObj):
     kind: str = field(init=False, default="Interface")
     version: str
 
-    @property
-    def qual_name(self):
-        return f"{self.name}:{self.version}"
+    # XXX: this needs a merged composed form
+    # each service/endpoint in teh relations should
+    # have a change to update the composed values in rounds
+    # till nothing changes and the interpolation is complete
+    def __hash__(self):
+        return hash((self.name, self.kind, self.version))
 
     def serialized(self):
         return dict(
             name=self.name,
             kind=self.kind,
             version=self.version,
-            defaults=self.entity.get("defaults"),
+            defaults=dict(self.entity.get("defaults")),
             spec=self.entity.get("interface"),
         )
 
@@ -159,6 +183,9 @@ class Endpoint:
     service: Service
     interface: Interface
     addresses: List[Dict[str, str]]
+
+    def __hash__(self):
+        return hash((self.name, self.kind))
 
     @property
     def qual_name(self):
@@ -189,6 +216,9 @@ class Endpoint:
 class Relation:
     kind: str = field(init=False, default="Relation")
     endpoints: List[Endpoint] = field(default_factory=list)
+
+    def __hash__(self):
+        return hash((self.name, self.kind))
 
     @property
     def name(self):

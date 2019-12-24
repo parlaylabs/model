@@ -47,3 +47,17 @@ def test_merge_paths():
     assert r["baz"] == "whatever"
     assert r["new"] == "true"
     assert utils.nested_get(sample, "this.high") == "low"
+
+
+def test_merging_chainmap_simple():
+    m = utils.MergingChainMap()
+    m.update(dict(this="test", a=1))
+    assert m["this"] == "test"
+    m.new_child()
+    m.update(dict(this="that", c=3))
+    assert m["this"] == "that"
+    assert m["a"] == 1
+    assert m["c"] == 3
+    m.remove_child()
+    assert m["this"] == "test"
+

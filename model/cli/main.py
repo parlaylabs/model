@@ -27,7 +27,7 @@ class ModelConfig:
         return runtime_impl.resolve(name, self.store)
 
     def get_environment(self, name=None):
-        envs = list(self.store.kind["Environment"]["name"].keys())
+        envs = list(self.store.environment.keys())
         if len(envs) == 1:
             if name and envs[0] != name:
                 log.warning(f"Requesting env {name} but only {envs} are configured")
@@ -36,7 +36,7 @@ class ModelConfig:
         else:
             if not name:
                 name = self.find("environment")
-        return self.store.qual_name[f"Environment:{name}"]
+        return self.store.environment[name]
 
     def find(self, name, ctx=None):
         if not ctx:
@@ -122,10 +122,7 @@ def graph(config, **kwargs):
 @using(ModelConfig, common_args, graph_common)
 def plan(config, **kwargs):
     config.init()
-    graphs = config.store["kind"].get("Graph")
-    if not graphs:
-        raise KeyError("No graphs to plan in config")
-    graphs = graphs["name"].values()
+    graphs = config.store.graph.values()
     for graph in graphs:
         graph = graph_manager.plan(
             graph, config.store, environment=config.environment, runtime=config.runtime
@@ -139,10 +136,7 @@ def plan(config, **kwargs):
 @click.option("-k", "--kustomize", type=bool, default=False)
 def apply(config, output_dir, kustomize, **kwargs):
     config.init()
-    graphs = config.store["kind"].get("Graph")
-    if not graphs:
-        raise KeyError("No graphs to plan in config")
-    graphs = graphs["name"].values()
+    graphs = config.store.graph.values()
     # Apply should be graph at a time
     # or at least a single runtime
 
@@ -170,10 +164,7 @@ def apply(config, output_dir, kustomize, **kwargs):
 def develop(config, update, **kwargs):
     config.init()
     # launch a development server for testing
-    graphs = config.store["kind"].get("Graph")
-    if not graphs:
-        raise KeyError("No graphs to serve in config")
-    graph_ents = graphs["name"].values()
+    graph_ents = config.store.graph.values()
     graphs = []
     for graph in graph_ents:
         graphs.append(
@@ -196,10 +187,7 @@ def shell(config, **kwargs):
 
     config.init()
     # launch a development server for testing
-    graphs = config.store["kind"].get("Graph")
-    if not graphs:
-        raise KeyError("No graphs to serve in config")
-    graph_ents = graphs["name"].values()
+    graph_ents = config.store.graph.values()
     graphs = []
     for graph in graph_ents:
         graphs.append(
@@ -213,6 +201,7 @@ def shell(config, **kwargs):
 
     ns = {
         "graphs": graphs,
+        "g": graphs[0],
         "store": config.store,
         "config": config,
         "dump": lambda x: print(utils.dump(x)),
