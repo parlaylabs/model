@@ -321,7 +321,7 @@ class Kustomize:
         context = dict(
             name=f"{service.name}-secrets",
             namespace=graph.name,
-            files=[f"configs/{graph.name}-{service.name}-config.yaml"],
+            files=[f"configs/{graph.name}-{service.name}-secrets.yaml"],
         )
 
         output.update(
