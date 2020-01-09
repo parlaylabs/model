@@ -4,8 +4,6 @@ config:
     public_dns: "example.com"
     services:
         ghost:
-            using:
-                - endpoint: "db"
             environment:
                 - name: url
                   value: "http://{service.name}.{public_dns}"
@@ -18,10 +16,14 @@ config:
                 - name: database__connection__user
                   value: "{db_remote.provided.admin_user}"
                 - name: database__connection__password
-                  value: changeme
+                  value: "{db_remote.provided_secrets.admin_password}"
                 - name: database__connection__database
                   value: "{service.name}"
         mysql:
+            config:
+                - endpoint: "db"
+                  data:
+                      admin_password: "testing"
             environment:
                 - name: MYSQL_ROOT_PASSWORD
-                  value: changeme
+                  value: { db_local.provided_secrets.admin_password }

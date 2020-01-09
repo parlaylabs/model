@@ -126,7 +126,7 @@ def interpolate(data, data_context=None):
         return _interpolate_str(data, data_context)
     else:
         if hasattr(data, "serialized"):
-            return data.serialized()
+            return interpolate(data.serialized(), data_context)
         else:
             return data
     return result

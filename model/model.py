@@ -88,6 +88,9 @@ class Service(GraphObj):
     def __hash__(self):
         return hash((self.name, self.kind))
 
+    def fini(self):
+        self._populate_endpoint_config()
+
     def add_endpoint(self, name, interface, role):
         ep = Endpoint(name=name, interface=interface, service=self, role=role)
         self.endpoints[name] = ep
@@ -142,6 +145,7 @@ class Service(GraphObj):
         else:
             base = remote.provided
         data = {remote.name: base}
+
         return utils.interpolate(data, context)
 
     def full_relations(self, secrets=False):
@@ -158,20 +162,19 @@ class Service(GraphObj):
                 return rel
         return None
 
-    def build_context_using(self, using):
+    def build_context_from_endpoints(self):
         """using is a spec in the format
         {endpoint: "epname", name: name in context}
         This is extracted and used to populate an interpolation context
         by adding name_relation, name_local and name_remote with the relations, and the endpoints.
         """
         ctx = {}
-        for use in using:
-            # XXX: This could be more flexible but to get it working
-            epspec = use["endpoint"]
-            name = use.get("name", epspec)
-            ep = self.endpoints[epspec]
+        for name, ep in self.endpoints.items():
             local = ep
             rel = self.get_relation_by_endpoint(ep)
+            if not rel:
+                # not all endpoints will be in a relation with this usage
+                continue
             remote = rel.get_remote(self)
             # TODO: verify the service is in the relation
             ctx[f"{name}_relation"] = rel
@@ -179,21 +182,41 @@ class Service(GraphObj):
             ctx[f"{name}_remote"] = remote
         return ctx
 
+    def _populate_endpoint_config(self):
+        env_config = self.graph.environment.get("config", {})
+        service_config = env_config.get("services", {}).get(self.name, {})
+        composed = jsonmerge.merge(self.config, service_config)
+        # XXX: resolve references to overlay vars from service_config.config
+        # into the endpoint data as a means of setting runtime values
+        # TODO: we should be able to reference vault and/or other secret mgmt tools
+        # here do reference actual credentials
+        config_data = service_config.get("config", [])
+        for cd in config_data:
+            epname = cd.get("endpoint")
+            endpoint = self.endpoints[epname]
+            data = cd.get("data", {})
+            for k, v in data.items():
+                item = utils.pick(endpoint.provides, name=k)
+                item["value"] = v
+
     def full_config(self):
         # There might be config for the service in either/both the graph and the environment.
         # The env will take priority as the graph object can be reusable but the env contains
         # specific overrides.
-
         env_config = self.graph.environment.get("config", {})
         service_config = env_config.get("services", {}).get(self.name, {})
         composed = jsonmerge.merge(self.config, service_config)
+        # XXX: resolve references to overlay vars from service_config.config
+        # into the endpoint data as a means of setting runtime values
+        # TODO: we should be able to reference vault and/or other secret mgmt tools
+        # here do reference actual credentials
         context = dict(service=self, this=self, **env_config)
         context.update(composed)
 
-        using = service_config.get("using")
-        if using:
-            ctx = self.build_context_using(using)
-            context.update(ctx)
+        # XXX: This could filter down to only the connected relation but
+        # for now we do all
+        ctx = self.build_context_from_endpoints()
+        context.update(ctx)
         return utils.interpolate(composed, context)
 
 
@@ -223,10 +246,13 @@ class Endpoint:
     service: Service
     interface: Interface
     role: str
-    # addresses: List[Dict[str, str]]
 
     def __hash__(self):
         return hash((self.name, self.kind))
+
+    @property
+    def runtime(self):
+        return self.service.runtime
 
     @property
     def qual_name(self):
@@ -249,7 +275,7 @@ class Endpoint:
                 # XXX: we could put "<redacted>"
                 # but for now we omit those  fields
                 continue
-            result[name] = spec.get("default")
+            result[name] = spec.get("value", spec.get("default"))
         return result
 
     @property
@@ -279,30 +305,6 @@ class Endpoint:
     @property
     def service_addr(self):
         return self.service.service_addr
-
-    @property
-    def addresses(self):
-        addrs = set()
-        for c in self.provides:
-            name = c.get("name")
-            if name == "address":
-                p = c.get("default")
-                # There may be interpolation needed here
-                p = utils.interpolate(
-                    p,
-                    dict(
-                        this=self,
-                        endpoint=self,
-                        service=self.service,
-                        interface=self.interface,
-                        runtime=self.service.runtime,
-                        graph=self.service.graph,
-                    ),
-                )
-                addrs.add(p)
-        addrs = list(addrs)
-        addrs.sort()
-        return addrs
 
     @property
     def ports(self):

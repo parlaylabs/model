@@ -8,6 +8,7 @@ import jsonmerge
 from . import entity
 from . import model
 from . import runtime as runtime_impl
+from . import store
 from . import utils
 
 log = logging.getLogger(__name__)
@@ -41,6 +42,9 @@ class Graph:
         # Inject the graph objects belong to so they can resolve other objects
         for entity in self.nodes:
             entity.graph = self
+            fini = getattr(entity, "fini", None)
+            if fini:
+                fini()
 
 
 def plan(graph_entity, store, environment, runtime=None):
@@ -90,14 +94,6 @@ def plan(graph_entity, store, environment, runtime=None):
             # XXX: this would have to improve and be version aware if its
             # going to work this way.
             iface = interface_impls.get(iface_name, {})
-            # defaults = iface.entity.get("defaults", {}).get("addresses").copy()
-            # if not addresses:
-            #     addresses = defaults
-            # else:
-            #     # XXX: use arrayMergeById and idRef=/name
-            #     addresses = jsonmerge.merge(
-            #         defaults, addresses, dict(mergeStrategy="arrayMergeByIndex"),
-            #     )
             ep = s.add_endpoint(name=ep["name"], interface=iface, role=iface_role)
             log.debug(f"adding endpoint to service {s.name} {ep.qual_name}")
 
