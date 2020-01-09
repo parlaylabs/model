@@ -25,6 +25,17 @@ class RuntimePlugin:
 class Kubernetes:
     name: str = field(init=False, default="Kubernetes")
 
+    def service_addr(self, service, graph):
+        return f"{service.name}.{graph.name}.svc.cluster.local"
+
+    def config_map_for(self, service):
+        cm = dict(config=service.full_config(), relations=service.full_relations())
+        return cm
+
+    def secrets_for(self, service):
+        secrets = dict(relations=service.full_relations(secrets=True))
+        return secrets
+
     def render_service(self, service, graph, output):
         # push out a deployment
         ports = service.ports
@@ -33,9 +44,9 @@ class Kubernetes:
         for p in ports:
             dports.append(dict(containerPort=int(p["port"]), protocol="TCP"))
 
-        sconfig = graph.environment.config.get("services", {}).get(service.name, {})
-        senv = sconfig.get("environment", [])
-
+        # sconfig = graph.environment.config.get("services", {}).get(service.name, {})
+        # senv = sconfig.get("environment", [])
+        senv = service.full_config().get("environment", [])
         labels = {
             "app.kubernetes.io/name": service.name,
             "app.kubernetes.io/version": str(service.entity.version),
@@ -54,11 +65,21 @@ class Kubernetes:
         if nsfn not in output:
             output.add(nsfn, ns, self, graph=graph)
 
-        # XXX: This must become the full context, see Kustomize.render_service notes for the change
-        config_map = service.serialized()
+        # creating the context for the config map involves all the service config and any information
+        # provided by connected endpoints
+        config_map = self.config_map_for(service)
         output.add(
             f"configs/{graph.name}-{service.name}-config.yaml",
             config_map,
+            self,
+            service=service,
+            graph=graph,
+        )
+
+        secrets = self.secrets_for(service)
+        output.add(
+            f"configs/{graph.name}-{service.name}-secrets.yaml",
+            secrets,
             self,
             service=service,
             graph=graph,
@@ -95,16 +116,35 @@ class Kubernetes:
                                 "ports": dports,
                                 "env": senv,
                                 "volumeMounts": [
-                                    {"name": "model-config", "mountPath": "/etc/model"},
-                                    {"name": "podinfo", "mountPath": "/etc/podinfo"},
+                                    {
+                                        "name": "model-config",
+                                        "mountPath": "/etc/model/config",
+                                        "readOnly": True,
+                                    },
+                                    {
+                                        "name": "model-secrets",
+                                        "mountPath": "/etc/model/secrets",
+                                        "readOnly": True,
+                                    },
+                                    {
+                                        "name": "podinfo",
+                                        "mountPath": "/etc/podinfo",
+                                        "readOnly": True,
+                                    },
                                 ],
                             },
                         ],
                         "volumes": [
                             {
                                 "name": "model-config",
-                                # XXX: not using kustomize generator name
                                 "configMap": {"name": f"{service.name}-config",},
+                            },
+                            {
+                                "name": "model-secrets",
+                                "secret": {
+                                    "secretName": f"{service.name}-secrets",
+                                    "defaultMode": 0o511,
+                                },
                             },
                             {
                                 "name": "podinfo",
@@ -251,7 +291,11 @@ class Kustomize:
     fn = "kustomization.yaml"
 
     def init(self, graph, output):
-        output.add(self.fn, {"resources": [], "configMapGenerator": []}, self)
+        output.add(
+            self.fn,
+            {"resources": [], "configMapGenerator": [], "secretGenerator": []},
+            self,
+        )
 
     def render_service(self, service, graph, output):
         # For each service we inject a config-map for use in configuring
@@ -270,6 +314,19 @@ class Kustomize:
         output.update(
             self.fn,
             data={"data.configMapGenerator": [context]},
+            plugin=self,
+            schema={"mergeStrategy": "append"},
+        )
+
+        context = dict(
+            name=f"{service.name}-secrets",
+            namespace=graph.name,
+            files=[f"configs/{graph.name}-{service.name}-config.yaml"],
+        )
+
+        output.update(
+            self.fn,
+            data={"data.secretGenerator": [context]},
             plugin=self,
             schema={"mergeStrategy": "append"},
         )
@@ -295,6 +352,21 @@ class RuntimeImpl:
     @property
     def qual_name(self):
         return self.name
+
+    def method_lookup(self, name, reverse=True):
+        plugins = self.plugins
+        if reverse is True:
+            plugins = reversed(plugins)
+
+        for p in plugins:
+            m = getattr(p, name, None)
+            if m:
+                return m
+        raise AttributeError(f"RuntimeImpl plugins didn't provide a method {name}")
+
+    def service_addr(self, service, graph):
+        m = self.method_lookup("service_addr")
+        return m(service, graph)
 
     def render(self, graph, outputs):
         # Run three phases populating data dicts into outputs
@@ -328,6 +400,13 @@ class RuntimeImpl:
                 m(graph, outputs)
 
         return outputs
+
+
+def render_graph(graph, outputs):
+    # TODO: like above render() but resolve the runtime from each object
+    # TODO: split the rendering of relations to support 1/2 living in another runtime
+    #       ex render_relation_ep(relation.ep)
+    pass
 
 
 def resolve(runtime_name, store):

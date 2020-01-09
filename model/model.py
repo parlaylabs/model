@@ -88,16 +88,14 @@ class Service(GraphObj):
     def __hash__(self):
         return hash((self.name, self.kind))
 
-    def add_endpoint(self, name, interface, addresses=None):
-        ep = Endpoint(name=name, interface=interface, service=self, addresses=addresses)
+    def add_endpoint(self, name, interface, role):
+        ep = Endpoint(name=name, interface=interface, service=self, role=role)
         self.endpoints[name] = ep
         return ep
 
-    def get_remote_endpoint(self, epname):
-        this = self.endpoints[epname]
-        # scan the relations to and return the (relation, endpoint) pair
-
-        return utils.pick(self.endpoints, **kwargs)
+    @property
+    def service_addr(self):
+        return self.runtime.service_addr(self, self.graph)
 
     @property
     def exposed(self):
@@ -111,17 +109,12 @@ class Service(GraphObj):
             yield self.endpoints[ex]
 
     @property
-    def get_environment(self):
-        pass
-
-    @property
     def ports(self):
         ports = []
         for ep in self.endpoints.values():
-            for address in ep.addresses:
-                if "ports" in address:
-                    for port in address["ports"]:
-                        ports.append(dict(name=ep.name, port=str(port)))
+            if ep.provides:
+                for p in ep.ports:
+                    ports.append(dict(name=ep.name, port=str(p)))
         ports.sort(key=lambda x: x["name"])
         return ports
 
@@ -129,17 +122,63 @@ class Service(GraphObj):
         return dict(
             name=self.name,
             kind=self.kind,
-            relations=self.full_relations,
-            # endpoints=[e.serialized() for e in self.endpoints],
-            config=self.full_config,
+            relations=self.full_relations(),
+            config=self.full_config(),
         )
 
-    @property
-    def full_relations(self):
-        context = dict(service=self, this=self, graph=self.graph)
-        return utils.interpolate(self.relations, context)
+    def full_relation(self, relation, secrets=False):
+        remote = relation.get_remote(self)
+        context = dict(
+            service=remote,
+            local=relation.get_local(self),
+            this=self,
+            relation=relation,
+            remote=remote,
+            graph=self.graph,
+            runtime=self.runtime,
+        )
+        if secrets:
+            base = remote.provided_secrets
+        else:
+            base = remote.provided
+        data = {remote.name: base}
+        return utils.interpolate(data, context)
 
-    @property
+    def full_relations(self, secrets=False):
+        rels = []
+        for rel in self.relations:
+            rels.append(self.full_relation(rel, secrets=secrets))
+        return rels
+
+    def get_relation_by_endpoint(self, ep):
+        if isinstance(ep, str):
+            ep = self.endpoints[ep]
+        for rel in self.relations:
+            if ep in rel.endpoints:
+                return rel
+        return None
+
+    def build_context_using(self, using):
+        """using is a spec in the format
+        {endpoint: "epname", name: name in context}
+        This is extracted and used to populate an interpolation context
+        by adding name_relation, name_local and name_remote with the relations, and the endpoints.
+        """
+        ctx = {}
+        for use in using:
+            # XXX: This could be more flexible but to get it working
+            epspec = use["endpoint"]
+            name = use.get("name", epspec)
+            ep = self.endpoints[epspec]
+            local = ep
+            rel = self.get_relation_by_endpoint(ep)
+            remote = rel.get_remote(self)
+            # TODO: verify the service is in the relation
+            ctx[f"{name}_relation"] = rel
+            ctx[f"{name}_local"] = local
+            ctx[f"{name}_remote"] = remote
+        return ctx
+
     def full_config(self):
         # There might be config for the service in either/both the graph and the environment.
         # The env will take priority as the graph object can be reusable but the env contains
@@ -148,8 +187,13 @@ class Service(GraphObj):
         env_config = self.graph.environment.get("config", {})
         service_config = env_config.get("services", {}).get(self.name, {})
         composed = jsonmerge.merge(self.config, service_config)
-        context = dict(service=self, this=self)
+        context = dict(service=self, this=self, **env_config)
         context.update(composed)
+
+        using = service_config.get("using")
+        if using:
+            ctx = self.build_context_using(using)
+            context.update(ctx)
         return utils.interpolate(composed, context)
 
 
@@ -158,11 +202,8 @@ class Interface(GraphObj):
     name: str
     kind: str = field(init=False, default="Interface")
     version: str
+    roles: Dict[str, List[Dict[str, Any]]]
 
-    # XXX: this needs a merged composed form
-    # each service/endpoint in teh relations should
-    # have a change to update the composed values in rounds
-    # till nothing changes and the interpolation is complete
     def __hash__(self):
         return hash((self.name, self.kind, self.version))
 
@@ -171,8 +212,7 @@ class Interface(GraphObj):
             name=self.name,
             kind=self.kind,
             version=self.version,
-            defaults=dict(self.entity.get("defaults")),
-            spec=self.entity.get("interface"),
+            # roles=list(self.roles.keys()),
         )
 
 
@@ -182,7 +222,8 @@ class Endpoint:
     kind: str = field(init=False, default="Endpoint")
     service: Service
     interface: Interface
-    addresses: List[Dict[str, str]]
+    role: str
+    # addresses: List[Dict[str, str]]
 
     def __hash__(self):
         return hash((self.name, self.kind))
@@ -192,12 +233,98 @@ class Endpoint:
         return f"{self.service.name}:{self.name}"
 
     @property
+    def config(self):
+        c = self.interface.roles.get(self.role)
+        if not c:
+            c = {}
+        return c
+
+    def normalize_values(self, data, secrets=False):
+        # take the schema styled config data and map it to kvpairs
+        result = utils.AttrAccess()
+        for spec in data:
+            name = spec["name"]
+            is_secret = spec.get("secret", False)
+            if (is_secret and secrets is False) or (not is_secret and secrets is True):
+                # XXX: we could put "<redacted>"
+                # but for now we omit those  fields
+                continue
+            result[name] = spec.get("default")
+        return result
+
+    @property
+    def provides(self):
+        return self.config.get("provides", [])
+
+    @property
+    def provided(self):
+        return self.normalize_values(self.provides)
+
+    @property
+    def provided_secrets(self):
+        return self.normalize_values(self.provides, secrets=True)
+
+    @property
+    def requires(self):
+        return self.config.get("requires", [])
+
+    @property
+    def required(self):
+        return self.normalize_values(self.requires)
+
+    @property
+    def required_secrets(self):
+        return self.normalize_values(self.requires, secrets=True)
+
+    @property
+    def service_addr(self):
+        return self.service.service_addr
+
+    @property
+    def addresses(self):
+        addrs = set()
+        for c in self.provides:
+            name = c.get("name")
+            if name == "address":
+                p = c.get("default")
+                # There may be interpolation needed here
+                p = utils.interpolate(
+                    p,
+                    dict(
+                        this=self,
+                        endpoint=self,
+                        service=self.service,
+                        interface=self.interface,
+                        runtime=self.service.runtime,
+                        graph=self.service.graph,
+                    ),
+                )
+                addrs.add(p)
+        addrs = list(addrs)
+        addrs.sort()
+        return addrs
+
+    @property
     def ports(self):
         ports = set()
-        for a in self.addresses:
-            if "ports" in a:
-                for p in a["ports"]:
-                    ports.add(str(p))
+        for c in utils.filter_iter(self.provides, name="port"):
+            p = c.get("default")
+            if not p:
+                continue
+            # There may be interpolation needed here
+            p = utils.interpolate(
+                str(p),
+                dict(
+                    this=self,
+                    endpoint=self,
+                    service=self.service,
+                    interface=self.interface,
+                    runtime=self.service.runtime,
+                    config=self.config,
+                ),
+            )
+            ports.add(p)
+
         ports = list(ports)
         ports.sort()
         return ports
@@ -226,6 +353,28 @@ class Relation:
         return "=".join([ep.qual_name for ep in self.endpoints])
 
     qual_name = name
+
+    def get_remote(self, service):
+        # return the remote endpoint for a relation given the 'local' service
+        found = False
+        remote = None
+        for ep in self.endpoints:
+            if ep.service == service:
+                found = True
+            else:
+                remote = ep
+            if found and remote:
+                break
+        if not found:
+            raise ValueError(f"Service not in relation {self.seralized}")
+        return remote
+
+    def get_local(self, service):
+        # return the remote endpoint for a relation given the 'local' service
+        for ep in self.endpoints:
+            if ep.service == service:
+                return ep
+        raise ValueError(f"Service not in relation {self.seralized}")
 
     def serialized(self):
         return dict(

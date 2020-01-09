@@ -3,7 +3,8 @@ name: nginx
 image: nginx:latest
 version: 1
 endpoints:
-    - name: http_proxy
-      interface: http_proxy:1
-    - name: http
-      interface: http
+  - name: http_proxy
+    # XXX: proxy
+    interface: http:client
+  - name: http
+    interface: http:server

@@ -4,4 +4,4 @@ image: nginxdemos/hello
 version: 1
 endpoints:
   - name: http
-    interface: http
+    interface: http:server

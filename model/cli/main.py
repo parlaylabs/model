@@ -205,6 +205,7 @@ def shell(config, **kwargs):
         "store": config.store,
         "config": config,
         "dump": lambda x: print(utils.dump(x)),
+        "view": graph_manager.view,
     }
 
     class O:

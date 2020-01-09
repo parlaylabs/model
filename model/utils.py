@@ -9,6 +9,7 @@ from pathlib import Path
 
 import jmespath
 import jsonmerge
+import yaml
 
 _marker = object()
 
@@ -31,6 +32,13 @@ class AttrAccess(dict):
 
     def serialized(self):
         return dict(self)
+
+
+def AttrAccess_representer(dumper, data):
+    return dumper.represent_dict(dict(data))
+
+
+yaml.add_representer(AttrAccess, AttrAccess_representer)
 
 
 def nested_get(obj, path=None, default=None):
@@ -84,7 +92,7 @@ def _interpolate_str(v, data_context):
     if v.startswith("{{") and v.endswith("}}") and v.count("{") == 2:
         # parse out the path. resolve it
         v = v[2:-2]
-        return interpolate(nested_get(data_context, v), data_context)
+        return interpolate(prop_get(data_context, v), data_context)
     else:
         return v.format_map(data_context)
 

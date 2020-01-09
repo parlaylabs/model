@@ -99,17 +99,6 @@ class Renderer(list):
     def filter(self, **kwargs):
         return self.pick(reversed=True, **kwargs)
 
-    def interpolate(self):
-        # This happens after all the base data has been added, it allows
-        # more sophisticated interpolations
-        for ent in self:
-            # XXX: this should be properly assembled in the runtime layer, not here
-            ctx = {}
-            ctx.update(ent.data)
-            ctx.update(ent.annotations)
-            log.debug(f"Interpolating {ent.name} using {ctx.keys()}")
-            ent.data = utils.interpolate(ent.data, ctx)
-
     def __contains__(self, key):
         return key in self.index
 
@@ -118,7 +107,6 @@ class DirectoryRenderer(Renderer):
     def write(self):
         if not self.root.exists():
             self.root.mkdir()
-        self.interpolate()
         for ent in self:
             ofn = (self.root / ent.name).resolve()
             ofn.parent.mkdir(mode=0o744, parents=True, exist_ok=True)
@@ -127,17 +115,16 @@ class DirectoryRenderer(Renderer):
                 if not isinstance(data, list):
                     data = [data]
                 print("---", file=fp)
-                yaml.safe_dump_all(data, stream=fp)
+                yaml.dump_all(data, stream=fp)
 
 
 class FileRenderer(Renderer):
     def write(self):
-        self.interpolate()
         with streamer(self.root) as fp:
             for ent in self:
                 data = ent.data
                 if not isinstance(ent, list):
                     data = [data]
                 print("---", file=fp)
-                yaml.safe_dump_all(data, stream=fp)
+                yaml.dump_all(data, stream=fp)
 

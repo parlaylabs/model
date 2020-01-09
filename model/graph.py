@@ -53,7 +53,7 @@ def plan(graph_entity, store, environment, runtime=None):
 
     for ie in store.interface.values():
         iface = model.Interface(
-            entity=ie, name=ie.name, version=ie.get("version", "latest")
+            entity=ie, name=ie.name, version=ie.get("version", "latest"), roles=ie.role
         )
         interface_impls[iface.name] = iface
 
@@ -82,7 +82,7 @@ def plan(graph_entity, store, environment, runtime=None):
             # look up a known interface if it exists and use
             # its values as defaults
             addresses = ep.get("addresses", [])
-            iface_name, _, iface_version = ep["interface"].partition(":")
+            iface_name, _, iface_role = ep["interface"].partition(":")
             if iface_name not in interface_impls:
                 print(
                     f"endpoint {ep} using unregistered interface {iface_name} for Service {s.name}"
@@ -90,15 +90,15 @@ def plan(graph_entity, store, environment, runtime=None):
             # XXX: this would have to improve and be version aware if its
             # going to work this way.
             iface = interface_impls.get(iface_name, {})
-            defaults = iface.entity.get("defaults", {}).get("addresses").copy()
-            if not addresses:
-                addresses = defaults
-            else:
-                # XXX: use arrayMergeById and idRef=/name
-                addresses = jsonmerge.merge(
-                    defaults, addresses, dict(mergeStrategy="arrayMergeByIndex"),
-                )
-            ep = s.add_endpoint(name=ep["name"], interface=iface, addresses=addresses)
+            # defaults = iface.entity.get("defaults", {}).get("addresses").copy()
+            # if not addresses:
+            #     addresses = defaults
+            # else:
+            #     # XXX: use arrayMergeById and idRef=/name
+            #     addresses = jsonmerge.merge(
+            #         defaults, addresses, dict(mergeStrategy="arrayMergeByIndex"),
+            #     )
+            ep = s.add_endpoint(name=ep["name"], interface=iface, role=iface_role)
             log.debug(f"adding endpoint to service {s.name} {ep.qual_name}")
 
         components[name] = comp
@@ -156,11 +156,11 @@ def view(g):
     import webbrowser
 
     gv = graphviz.Graph(format="svg")
-    with gv.subgraph(name=g.model.name, comment=g.model.name) as cluster:
+    with gv.subgraph(name=g.name, comment=g.name) as cluster:
         for rel in g.relations:
             cluster.edge(
                 *[ep.qual_name for ep in rel.endpoints],
-                label=rel.endpoints[0].interface,
+                label=rel.endpoints[0].interface.name,
             )
 
         # There might be unconnected services (which is broken but we want to show here)

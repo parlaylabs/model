@@ -4,4 +4,4 @@ image: mysql:5.7
 version: 1
 endpoints:
   - name: db
-    interface: mysql:5.7
+    interface: mysql:server

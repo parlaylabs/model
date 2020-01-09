@@ -4,4 +4,4 @@ image: kennethreitz/httpbin
 version: 1
 endpoints:
   - name: http
-    interface: http
+    interface: http:server
