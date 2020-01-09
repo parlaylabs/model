@@ -2,3 +2,26 @@ kind: Environment
 name: dev
 config:
     public_dns: "example.com"
+    services:
+        ghost:
+            using:
+                - endpoint: "db"
+            environment:
+                - name: url
+                  value: "http://{service.name}.{public_dns}"
+                - name: database__client
+                  value: "{db_remote.service.name}"
+                - name: database__connection__host
+                  value: "{db_remote.service.service_addr}"
+                - name: database__connection__port
+                  value: "{db_remote.ports[0]}"
+                - name: database__connection__user
+                  value: "{db_remote.provided.admin_user}"
+                - name: database__connection__password
+                  value: changeme
+                - name: database__connection__database
+                  value: "{service.name}"
+        mysql:
+            environment:
+                - name: MYSQL_ROOT_PASSWORD
+                  value: changeme
