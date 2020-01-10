@@ -26,4 +26,4 @@ config:
                       admin_password: "testing"
             environment:
                 - name: MYSQL_ROOT_PASSWORD
-                  value: { db_local.provided_secrets.admin_password }
+                  value: "{db_local.provided_secrets.admin_password}"
