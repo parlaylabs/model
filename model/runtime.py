@@ -69,18 +69,20 @@ class Kubernetes:
         # provided by connected endpoints
         config_map = self.config_map_for(service)
         output.add(
-            f"configs/{graph.name}-{service.name}-config.yaml",
+            f"configs/{graph.name}-{service.name}-config.json",
             config_map,
             self,
+            format="json",
             service=service,
             graph=graph,
         )
 
         secrets = self.secrets_for(service)
         output.add(
-            f"configs/{graph.name}-{service.name}-secrets.yaml",
+            f"configs/{graph.name}-{service.name}-secrets.json",
             secrets,
             self,
+            format="json",
             service=service,
             graph=graph,
         )
@@ -308,7 +310,7 @@ class Kustomize:
         context = dict(
             name=f"{service.name}-config",
             namespace=graph.name,
-            files=[f"configs/{graph.name}-{service.name}-config.yaml"],
+            files=[f"configs/{graph.name}-{service.name}-config.json"],
         )
 
         output.update(
@@ -321,7 +323,7 @@ class Kustomize:
         context = dict(
             name=f"{service.name}-secrets",
             namespace=graph.name,
-            files=[f"configs/{graph.name}-{service.name}-secrets.yaml"],
+            files=[f"configs/{graph.name}-{service.name}-secrets.json"],
         )
 
         output.update(

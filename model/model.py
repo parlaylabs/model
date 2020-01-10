@@ -149,9 +149,9 @@ class Service(GraphObj):
         return utils.interpolate(data, context)
 
     def full_relations(self, secrets=False):
-        rels = []
+        rels = {}
         for rel in self.relations:
-            rels.append(self.full_relation(rel, secrets=secrets))
+            rels.update(self.full_relation(rel, secrets=secrets))
         return rels
 
     def get_relation_by_endpoint(self, ep):
@@ -163,10 +163,8 @@ class Service(GraphObj):
         return None
 
     def build_context_from_endpoints(self):
-        """using is a spec in the format
-        {endpoint: "epname", name: name in context}
-        This is extracted and used to populate an interpolation context
-        by adding name_relation, name_local and name_remote with the relations, and the endpoints.
+        """Build context to populate an interpolation context by adding name_relation, 
+        name_local and name_remote with the relations, and the endpoints.
         """
         ctx = {}
         for name, ep in self.endpoints.items():

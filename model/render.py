@@ -1,5 +1,6 @@
 import functools
 import io
+import json
 import logging
 import sys
 
@@ -112,10 +113,14 @@ class DirectoryRenderer(Renderer):
             ofn.parent.mkdir(mode=0o744, parents=True, exist_ok=True)
             with open(ofn, "w", encoding="utf-8") as fp:
                 data = ent.data
-                if not isinstance(data, list):
-                    data = [data]
-                print("---", file=fp)
-                yaml.dump_all(data, stream=fp)
+                fmt = ent.annotations.get("format", "yaml")
+                if fmt == "yaml":
+                    if not isinstance(data, list):
+                        data = [data]
+                    print("---", file=fp)
+                    yaml.dump_all(data, stream=fp)
+                elif fmt == "json":
+                    fp.write(utils.dump(data))
 
 
 class FileRenderer(Renderer):
