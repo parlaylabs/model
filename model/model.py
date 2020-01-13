@@ -65,7 +65,6 @@ class Environment(GraphObj):
         return hash((self.name, self.kind))
 
 
-@schema.register_class
 @dataclass(unsafe_hash=True)
 class Component(GraphObj):
     name: str
@@ -90,6 +89,51 @@ class Service(GraphObj):
 
     def fini(self):
         self._populate_endpoint_config()
+
+    def _populate_endpoint_config(self):
+        env_config = self.graph.environment.get("config", {})
+        service_config = env_config.get("services", {}).get(self.name, {})
+        composed = jsonmerge.merge(self.config, service_config)
+        # XXX: resolve references to overlay vars from service_config.config
+        # into the endpoint data as a means of setting runtime values
+        # TODO: we should be able to reference vault and/or other secret mgmt tools
+        # here do reference actual credentials
+        config_data = service_config.get("config", [])
+        for cd in config_data:
+            epname = cd.get("endpoint")
+            endpoint = self.endpoints[epname]
+            data = cd.get("data", {})
+            for k, v in data.items():
+                item = utils.pick(endpoint.provides, name=k)
+                # This works because normalize_values in ep
+                # prefers 'value' to 'default'
+                # XXX: really we'd want this to delegate to the underlying facets
+                # but that will take some reactoring
+                item["value"] = v
+
+    def validate(self):
+        for rel in self.relations:
+            rel.validate()
+
+        comp = self.entity
+        # this is the environment validation relative to the component
+        envspec = comp.get("environment", {})
+        requires = envspec.get("requires", [])
+
+        config = self.full_config()
+        env = config.get("environment", [])
+        for key in requires:
+            v = utils.pick(env, name=key)
+            if not v:
+                # XXX: these should become validationerrors
+                raise ValueError(
+                    f"Missing required ENV variable {key} in endpoint {self.name} for service {self.service.name}."
+                )
+            val = v.get("value")
+            if not val:
+                raise ValueError(
+                    f"Empty required environment variable {key} for endpoint {self.name} in service {self.service.name}"
+                )
 
     def add_endpoint(self, name, interface, role):
         ep = Endpoint(name=name, interface=interface, service=self, role=role)
@@ -131,9 +175,10 @@ class Service(GraphObj):
 
     def full_relation(self, relation, secrets=False):
         remote = relation.get_remote(self)
+        local = relation.get_local(self)
         context = dict(
             service=remote,
-            local=relation.get_local(self),
+            local=local,
             this=self,
             relation=relation,
             remote=remote,
@@ -144,7 +189,9 @@ class Service(GraphObj):
             base = remote.provided_secrets
         else:
             base = remote.provided
-        data = {remote.name: base}
+        base["interface"] = local.interface.qual_name
+        base["service"] = remote.service.name
+        data = {local.name: base}
 
         return utils.interpolate(data, context)
 
@@ -180,23 +227,6 @@ class Service(GraphObj):
             ctx[f"{name}_remote"] = remote
         return ctx
 
-    def _populate_endpoint_config(self):
-        env_config = self.graph.environment.get("config", {})
-        service_config = env_config.get("services", {}).get(self.name, {})
-        composed = jsonmerge.merge(self.config, service_config)
-        # XXX: resolve references to overlay vars from service_config.config
-        # into the endpoint data as a means of setting runtime values
-        # TODO: we should be able to reference vault and/or other secret mgmt tools
-        # here do reference actual credentials
-        config_data = service_config.get("config", [])
-        for cd in config_data:
-            epname = cd.get("endpoint")
-            endpoint = self.endpoints[epname]
-            data = cd.get("data", {})
-            for k, v in data.items():
-                item = utils.pick(endpoint.provides, name=k)
-                item["value"] = v
-
     def full_config(self):
         # There might be config for the service in either/both the graph and the environment.
         # The env will take priority as the graph object can be reusable but the env contains
@@ -225,6 +255,10 @@ class Interface(GraphObj):
     version: str
     roles: Dict[str, List[Dict[str, Any]]]
 
+    @property
+    def qual_name(self):
+        return f"{self.name}:{self.version}"
+
     def __hash__(self):
         return hash((self.name, self.kind, self.version))
 
@@ -235,6 +269,24 @@ class Interface(GraphObj):
             version=self.version,
             # roles=list(self.roles.keys()),
         )
+
+    def validate(self, service, endpoint):
+        # ensure that the endpoint 'provides' have been provided with values
+        rel = service.get_relation_by_endpoint(endpoint)
+        ep = rel.get_remote(service)
+        rservice = ep.service
+        vals = rservice.full_relation(rel)
+        priv = rservice.full_relation(rel, secrets=True)
+        vals = jsonmerge.merge(vals, priv)
+        specs = self.roles[endpoint.role].get("provides", [])
+        type_map = {"str": str, "string": str, "int": int, "number": (int, float)}
+        for spec in specs:
+            name = spec["name"]
+            v = vals[endpoint.name].get(name)
+            if v is None or not isinstance(v, type_map[spec.get("type", "str")]):
+                raise ValueError(
+                    f"Missing expected value '{name}' for interface {self.name} from endpoint {ep.name}:{ep.role} of service {rservice.name}\n{vals}"
+                )
 
 
 @dataclass
@@ -338,6 +390,33 @@ class Endpoint:
             addresses=self.addresses,
         )
 
+    def validate(self):
+        # The component may have defined things like ENV vars that are needed for the component to run
+        # ensure that in their final config all such values are present for the connected relations
+        # Note that this should be called from the relation object to validate each endpoint as there
+        # are no requirements to validate unrelated endpoints
+        comp = self.service.entity
+        # this is the environment validation relative to the component
+        epspec = utils.pick(comp.endpoints, name=self.name)
+        envspec = epspec.get("environment", {})
+        requires = envspec.get("requires", [])
+
+        config = self.service.full_config()
+        env = config.get("environment", [])
+        for key in requires:
+            v = utils.pick(env, name=key)
+            if not v:
+                # XXX: these should become validationerrors
+                raise ValueError(
+                    f"Missing required ENV variable {key} in endpoint {self.name} for service {self.service.name}."
+                )
+            val = v.get("value")
+            if not val:
+                raise ValueError(
+                    f"Empty required environment variable {key} for endpoint {self.name} in service {self.service.name}"
+                )
+        self.interface.validate(self.service, self)
+
 
 @dataclass
 class Relation:
@@ -383,3 +462,6 @@ class Relation:
             endpoints=[e.serialized() for e in self.endpoints],
         )
 
+    def validate(self):
+        for ep in self.endpoints:
+            ep.validate()

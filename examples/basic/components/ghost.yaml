@@ -2,9 +2,23 @@ kind: Component
 name: ghost
 image: ghost:3-alpine
 version: 1
+environment:
+  requires: ["url"]
 endpoints:
   - name: db
     interface: mysql:client
+    environment:
+      # Required if building a relation with this endpoint
+      # this is the component describing what it needs to run
+      requires:
+        [
+          "database__client",
+          "database__connection__host",
+          "database__connection__port",
+          "database__connection__user",
+          "database__connection__password",
+          "database__connection__database",
+        ]
   - name: http
     interface: http:server
     addresses:

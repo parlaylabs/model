@@ -11,4 +11,4 @@ role:
       - { name: port, default: "3306", type: str }
       - { name: admin_user, type: str, default: "root" }
       - { name: admin_password, type: str, secret: true }
-  client: null
+  client: {}

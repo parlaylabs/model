@@ -46,6 +46,9 @@ class Graph:
             if fini:
                 fini()
 
+        for entity in self.nodes:
+            entity.validate()
+
 
 def plan(graph_entity, store, environment, runtime=None):
     # runtime is provided as a default, it can/should be overridden and resolved per Service
