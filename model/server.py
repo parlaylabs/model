@@ -89,8 +89,13 @@ class Server:
 
     async def get_interface(self, request):
         name = request.match_info["name"]
-        interface = self.store.kind["Interface"]["name"][name]
+        interface = self.store.interface[name]
         return web.json_response(interface.serialized())
+
+    async def get_component(self, request):
+        name = request.match_info["name"]
+        comp = self.store.component.get(name)
+        return web.json_response(comp.serialized())
 
     def serve_forever(self, store, update=False):
         self.store = store
@@ -99,13 +104,14 @@ class Server:
 
         app = web.Application()
         app["websockets"] = set()
-        app.on_startup.append(self.open_viewer)
+        # app.on_startup.append(self.open_viewer)
         app.on_shutdown.append(self.cleanup_ws)
         app.add_routes(
             [
                 web.get("/", self.index),
                 # web.request("/api/v1/service/<name>", self.update_service)
                 web.get("/api/v1/interface/{name}", self.get_interface),
+                web.get("/api/v1/component/{name}", self.get_component),
                 web.get("/ws", self.handle),
             ]
         )
