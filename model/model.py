@@ -306,7 +306,7 @@ class Endpoint:
 
     @property
     def qual_name(self):
-        return f"{self.service.name}:{self.name}"
+        return f"{self.service.name}:{self.name}({self.interface.name}:{self.role})"
 
     @property
     def config(self):
@@ -387,7 +387,6 @@ class Endpoint:
             kind=self.kind,
             service=self.service.name,
             interface=self.interface.serialized(),
-            addresses=self.addresses,
         )
 
     def validate(self):
@@ -429,7 +428,7 @@ class Relation:
     @property
     def name(self):
         # join the endpoint names
-        return "=".join([ep.qual_name for ep in self.endpoints])
+        return "<>".join([ep.qual_name for ep in self.endpoints])
 
     qual_name = name
 

@@ -22,6 +22,7 @@ class Graph:
     runtime: runtime_impl
     environment: model.Environment
     interfaces: Dict[str, model.Interface]
+    store: store.Store
 
     @property
     def name(self):
@@ -48,6 +49,12 @@ class Graph:
 
         for entity in self.nodes:
             entity.validate()
+
+    def __getattr__(self, key):
+        # Proxy the indexes from store
+        # This would allow seeing items in the store that are not
+        # in the actual graph, but that can be ok for now
+        return getattr(self.store, key)
 
 
 def plan(graph_entity, store, environment, runtime=None):
@@ -139,6 +146,7 @@ def plan(graph_entity, store, environment, runtime=None):
         runtime=runtime,
         environment=environment,
         interfaces=interface_impls,
+        store=store,
     )
     # view(g)
     return g
