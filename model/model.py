@@ -103,13 +103,7 @@ class Service(GraphObj):
             epname = cd.get("endpoint")
             endpoint = self.endpoints[epname]
             data = cd.get("data", {})
-            for k, v in data.items():
-                item = utils.pick(endpoint.provides, name=k)
-                # This works because normalize_values in ep
-                # prefers 'value' to 'default'
-                # XXX: really we'd want this to delegate to the underlying facets
-                # but that will take some reactoring
-                item["value"] = v
+            endpoint.data.update(data)
 
     def validate(self):
         for rel in self.relations:
@@ -254,6 +248,7 @@ class Interface(GraphObj):
     kind: str = field(init=False, default="Interface")
     version: str
     roles: Dict[str, List[Dict[str, Any]]]
+    data: Dict[str, Any] = field(init=False, repr=False)
 
     @property
     def qual_name(self):
@@ -296,6 +291,7 @@ class Endpoint:
     service: Service
     interface: Interface
     role: str
+    data: Dict[str, Any] = field(init=False, default_factory=utils.AttrAccess)
 
     def __hash__(self):
         return hash((self.name, self.kind))
@@ -325,7 +321,7 @@ class Endpoint:
                 # XXX: we could put "<redacted>"
                 # but for now we omit those  fields
                 continue
-            result[name] = spec.get("value", spec.get("default"))
+            result[name] = self.data.get(name, spec.get("default"))
         return result
 
     @property
