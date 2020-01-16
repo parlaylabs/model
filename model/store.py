@@ -94,6 +94,9 @@ class Store:
     def state(self):
         return self.__state
 
+    def __len__(self):
+        return len(self.__state)
+
     def __iter__(self):
         return iter(self.__state)
 
