@@ -118,7 +118,11 @@ def _interpolate_str(v, data_context):
         # Fast path -- however computed properties might make the 2nd form nearly as fast
         return v.format_map(data_context)
     except (AttributeError, KeyError):
-        return fstring(v, data_context)
+        try:
+            return fstring(v, data_context)
+        except AttributeError as e:
+            breakpoint()
+            raise AttributeError(f"Error interpolating {v} with {data_context.keys()}")
 
 
 def interpolate(data, data_context=None):
