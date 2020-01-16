@@ -1,8 +1,9 @@
+import ast
 import copy
 import functools
 import itertools
 import json
-
+import re
 from collections import ChainMap
 from dataclasses import fields
 from pathlib import Path
@@ -88,17 +89,40 @@ def merge_path(obj, path, data, schema=None):
     return merge_paths(obj, overrides, schema=schema)
 
 
+_fstring_expr = re.compile("{(?P<expr>[^}]+?)}|(?P<str>[^{]+)")
+
+
+def fstring(string, data_context):
+    # This is an f-string like mini-implementation
+    # we do this to make pulling expressions from user written yaml
+    # function in a way like f-strings (able to eval expressions)
+    output = []
+    matches = re.finditer(_fstring_expr, string)
+    for m in matches:
+        expr = m.group("expr")
+        string = m.group("str")
+        if expr:
+            expr = ast.parse("(" + expr + ")", "<interpolation>", "eval")
+            code = compile(expr, "<interpolation>", "eval")
+            result = eval(code, None, data_context)
+            output.append(result)
+        elif string:
+            output.append(string)
+    if len(output) > 1:
+        return "".join([str(s) for s in output])
+    return output[0]
+
+
 def _interpolate_str(v, data_context):
-    if v.startswith("{{") and v.endswith("}}") and v.count("{") == 2:
-        # parse out the path. resolve it
-        v = v[2:-2]
-        return interpolate(prop_get(data_context, v), data_context)
-    else:
+    try:
+        # Fast path -- however computed properties might make the 2nd form nearly as fast
         return v.format_map(data_context)
+    except (AttributeError, KeyError):
+        return fstring(v, data_context)
 
 
 def interpolate(data, data_context=None):
-    if isinstance(data, (str, int, float, dict, tuple, list, set)):
+    if isinstance(data, (dict, tuple, list, set)):
         result = type(data)()
     else:
         result = copy.copy(data)
@@ -111,7 +135,7 @@ def interpolate(data, data_context=None):
         for k, v in data.items():
             if isinstance(v, dict):
                 result[k] = interpolate(v, data_context)
-            elif isinstance(v, list):
+            elif isinstance(v, (list, tuple, set)):
                 lst_result = []
                 for item in v:
                     lst_result.append(interpolate(item, data_context))
@@ -272,4 +296,3 @@ def apply_to_dataclass(cls, **kwargs):
         if f and f.init is not False:
             args[k] = kwargs[k]
     return cls(**args)
-

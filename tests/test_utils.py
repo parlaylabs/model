@@ -61,3 +61,8 @@ def test_merging_chainmap_simple():
     m.remove_child()
     assert m["this"] == "test"
 
+
+def test_fake_fstring():
+    data = utils.AttrAccess(dict(obj=utils.AttrAccess({"name": "foo"})))
+    assert utils.fstring("{obj.name} and {40 + 2}", data) == "foo and 42"
+
