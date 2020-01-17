@@ -142,6 +142,14 @@ class Service(GraphObj):
 
     @property
     def service_addr(self):
+        rt = self.runtime
+        if not rt:
+            # When there is no runtime we depend on the address being encoded
+            # at the environment level. This contract will have to be validated
+            # in the future, but for now
+            config = self.full_config()
+            address = config.get("address")
+            return address
         return self.runtime.service_addr(self, self.graph)
 
     @property

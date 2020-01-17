@@ -126,7 +126,6 @@ def _interpolate_str(v, data_context):
         try:
             return fstring(v, data_context)
         except AttributeError as e:
-            breakpoint()
             raise AttributeError(f"Error interpolating {v} with {data_context.keys()}")
 
 

@@ -147,6 +147,8 @@ config:
 
 ```
 
+Config values (see config/services/mysql/config in example) will be overlaid onto the service and available for Variable Interpolation and Templating (see below). If the runtime is set to null we are indicating the deployment of the service isn't managed by model, however we can statically supply config as part of the environment here which will be available in relations to connect to.
+
 Concepts
 --------
 

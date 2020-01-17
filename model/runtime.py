@@ -422,7 +422,8 @@ def render_graph(graph, outputs):
     runtimes = set()
     # 1st collect all the runtimes referenced in the graph
     for obj in graph.services:
-        runtimes.add(obj.runtime)
+        if obj.runtime is not None:
+            runtimes.add(obj.runtime)
 
     for runtime in runtimes:
         for plugin in runtime.plugins:
@@ -436,6 +437,8 @@ def render_graph(graph, outputs):
         # <phase>_render_<kind.lower>
         for obj in graph.services:
             runtime = obj.runtime
+            if not runtime:
+                continue
             for plugin in runtime.plugins:
                 kind = obj.kind.lower()
                 mn = f"{phase}render_{kind}"
@@ -448,12 +451,14 @@ def render_graph(graph, outputs):
         for obj in graph.relations:
             for endpoint in obj.endpoints:
                 runtime = endpoint.service.runtime
+                if not runtime:
+                    continue
                 for plugin in runtime.plugins:
                     kind = obj.kind.lower()
-                    mn = f"{phase}render_{kind}"
+                    mn = f"{phase}render_relation_ep"
                     m = getattr(plugin, mn, None)
                     if m:
-                        m(obj, graph, outputs)
+                        m(obj, graph, outputs, endpoint)
 
     for runtime in runtimes:
         for plugin in runtime.plugins:
