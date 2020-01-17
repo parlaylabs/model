@@ -18,6 +18,9 @@ aiohttp = "*"
 jsonmerge = "*"
 jmespath = "*"
 jedi = "*"
+jinja2 = "*"
+requests = "*"
+requests-file = "*"
 
 [requires]
 python_version = "3.7"

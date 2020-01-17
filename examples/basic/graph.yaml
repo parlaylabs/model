@@ -1,5 +1,6 @@
 kind: Graph
 name: blog
+runtime: kubernetes
 services:
   - name: ghost
     expose: ["http"]

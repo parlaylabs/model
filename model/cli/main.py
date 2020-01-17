@@ -6,6 +6,7 @@ from pathlib import Path
 import click
 
 from .. import entity
+from .. import exceptions
 from .. import graph as graph_manager
 from .. import model, render
 from .. import runtime as runtime_impl
@@ -22,11 +23,23 @@ class ModelConfig:
         self.store = store.Store()
 
     def get_runtime(self, name=None):
-        if not name:
-            name = self.find("runtime")
+        if not self.store:
+            return
+        rts = list(self.store.runtime.keys())
+        if len(rts) == 1:
+            if name and rts[0] != name:
+                log.warning(f"Requesting env {name} but only {rts} are configured")
+            name = rts[0]
+            log.debug(f"Using only provided runtime {name} for config")
+        else:
+            if not name:
+                name = self.find("runtime")
+
         return runtime_impl.resolve(name, self.store)
 
     def get_environment(self, name=None):
+        if not self.store:
+            return
         envs = list(self.store.environment.keys())
         if len(envs) == 1:
             if name and envs[0] != name:
@@ -38,7 +51,7 @@ class ModelConfig:
                 name = self.find("environment")
         return self.store.environment[name]
 
-    def find(self, name, ctx=None):
+    def find(self, name, default=None, ctx=None):
         if not ctx:
             ctx = click.get_current_context()
         while ctx:
@@ -46,21 +59,26 @@ class ModelConfig:
             if val:
                 return val
             ctx = ctx.parent
-        raise KeyError(f"missing required param {name}")
+        return default
 
     def setup_logging(self):
         logging.basicConfig(level=self.find("log_level").upper())
         logging.getLogger("jsonmerge").setLevel(logging.WARNING)
 
     def load_configs(self):
-        for d in self.find("config_dir"):
+        cd = self.find("config_dir")
+        if not cd:
+            return
+        for d in cd:
             schema.load_config(self.store, d)
 
     def init(self):
         self.setup_logging()
         self.load_configs()
         self.environment = self.get_environment()
-        # XXX: this should be per object in graph, not global
+        # The graph can define a default runtime but any service in the graph could specify another
+        # the idea of what a runtime is belongs to the imported Runtime object of the name referenced
+        # by the object (service)
         self.runtime = self.get_runtime()
 
 
@@ -100,15 +118,13 @@ def component(ctx):
 
 @component.command()
 @using(ModelConfig, common_args)
-@click.argument("src_ref", type=str)
 def init(config, src_ref):
-    # Mock impl. For now just write the changes to a known file
-    print(f"init {src_ref}")
+    # XXX: This is just a testing impl, no flexability
+    pass
 
 
 graph_common = [
     spec("-e", "--environment"),
-    spec("-r", "--runtime", default="kubernetes"),
 ]
 
 
@@ -124,16 +140,14 @@ def plan(config, **kwargs):
     config.init()
     graphs = config.store.graph.values()
     for graph in graphs:
-        graph = graph_manager.plan(
-            graph, config.store, environment=config.environment, runtime=config.runtime
-        )
+        graph = graph_manager.plan(graph, config.store, environment=config.environment,)
         print(f"plan graph {graph}")
 
 
 @graph.command()
 @using(ModelConfig, common_args, graph_common)
 @click.option("-o", "--output-dir", default="-")
-@click.option("-k", "--kustomize", type=bool, default=False)
+@click.option("--kustomize/--no-kustomize", default=False)
 def apply(config, output_dir, kustomize, **kwargs):
     config.init()
     graphs = config.store.graph.values()
@@ -141,7 +155,9 @@ def apply(config, output_dir, kustomize, **kwargs):
     # or at least a single runtime
 
     if kustomize and output_dir == "-":
-        raise RuntimeError("You must output to a directory using -o <dir> to kustomize")
+        raise exceptions.ConfigurationError(
+            "You must output to a directory using -o <dir> to kustomize"
+        )
 
     if output_dir == "-":
         ren = render.FileRenderer(output_dir)
@@ -149,9 +165,7 @@ def apply(config, output_dir, kustomize, **kwargs):
         ren = render.DirectoryRenderer(output_dir)
 
     for graph in graphs:
-        graph = graph_manager.plan(
-            graph, config.store, environment=config.environment, runtime=config.runtime
-        )
+        graph = graph_manager.plan(graph, config.store, environment=config.environment)
         graph_manager.apply(graph, config.store, config.runtime, ren)
 
     if kustomize:
@@ -164,15 +178,17 @@ def apply(config, output_dir, kustomize, **kwargs):
 def develop(config, update, **kwargs):
     config.init()
     # launch a development server for testing
-    graph_ents = config.store.graph.values()
     graphs = []
+
+    try:
+        graph_ents = config.store.graph.values()
+    except KeyError:
+        graph_ents = []
+
     for graph in graph_ents:
         graphs.append(
             graph_manager.plan(
-                graph,
-                store=config.store,
-                runtime=config.runtime,
-                environment=config.environment,
+                graph, store=config.store, environment=config.environment,
             )
         )
     srv = server.Server(graphs)
@@ -192,10 +208,7 @@ def shell(config, **kwargs):
     for graph in graph_ents:
         graphs.append(
             graph_manager.plan(
-                graph,
-                store=config.store,
-                runtime=config.runtime,
-                environment=config.environment,
+                graph, store=config.store, environment=config.environment,
             )
         )
 
@@ -206,6 +219,7 @@ def shell(config, **kwargs):
         "config": config,
         "dump": lambda x: print(utils.dump(x)),
         "view": graph_manager.view,
+        "render": graphs[0].render,
     }
 
     class O:

@@ -3,11 +3,13 @@ import json
 import logging
 import weakref
 import webbrowser
+from io import StringIO
 
 import aiohttp
 from aiohttp import WSCloseCode
 from aiohttp import web
 
+from . import schema
 from . import utils
 
 log = logging.getLogger(__name__)
@@ -97,6 +99,13 @@ class Server:
         comp = self.store.component.get(name)
         return web.json_response(comp.serialized())
 
+    async def loader(self, request):
+        # XXX: simple impl here is a DoS vector
+        data = await request.read()
+        fh = StringIO(data.decode("utf-8"))
+        fh.name = "<upload>"
+        schema.load_and_store(fh, self.store)
+
     def serve_forever(self, store, update=False):
         self.store = store
         if update:
@@ -112,6 +121,7 @@ class Server:
                 # web.request("/api/v1/service/<name>", self.update_service)
                 web.get("/api/v1/interface/{name}", self.get_interface),
                 web.get("/api/v1/component/{name}", self.get_component),
+                web.post("/api/v1/loader", self.loader),
                 web.get("/ws", self.handle),
             ]
         )

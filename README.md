@@ -186,6 +186,20 @@ Variable Interpolation
 Resources in the graph undergo a process of variable interpolation which allows them to flexibly address the definitions and configration of connected components within the graph. The Interface and Environment examples above show examples of this. While the data provided need further documentation it is fare to say common model objects will have 'this' and 'service' defined and relations will be available as '<endpoint name>'_relation, '<endpoint_name>'_local and '<endpoint_name>_remote' giving access to the attributes defined in model/model.py. This makes it easy to substitute values where needed.
 
 
+Templates
+=========
+
+Components can define a **files** directive which will run Jinja2 templates with access to the full model context. These files will be mapped into the runtime (in the case of k8s as additional ConfigMaps/Volumes)
+
+  ```
+  files:
+    - container_path: /etc/model/overrides.conf
+      template: overrides.conf
+  ```
+
+This allows for the easy inclusion of config files into the container which are still updated and managed via a ConfigMapGenerator. This means that change can easily force new deployment rollouts.
+
+
 
 Workflow
 =========

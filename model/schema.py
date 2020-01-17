@@ -74,7 +74,7 @@ def load_and_store(fh, store):
     else:
         fp = fh
     try:
-        for obj in yaml.safe_load_all(fp):
+        for obj in yaml.load_all(fp, Loader=yaml.SafeLoader):
             # blindly assume we have a dict here
             obj = utils.AttrAccess(obj)
             e = utils.prop_get(store, f"{obj.kind}.{obj.name}".lower(), None)
@@ -86,6 +86,8 @@ def load_and_store(fh, store):
                 if cls is not None:
                     e = utils.apply_to_dataclass(cls, entity=e, **e.serialized())
             store.add(e)
+    except yaml.scanner.ScannerError as e:
+        raise SystemExit(f"Error processing {fp.name}: {e.problem} {e.problem_mark}")
     finally:
         fp.close()
 

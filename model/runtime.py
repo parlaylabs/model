@@ -1,10 +1,13 @@
 import itertools
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import List
 
 import yaml
 
+from . import exceptions
 from . import render
+from . import utils
 
 _plugins = {}
 _runtimes = {}
@@ -87,6 +90,75 @@ class Kubernetes:
             graph=graph,
         )
 
+        volumeMounts = [
+            {
+                "name": "model-config",
+                "mountPath": "/etc/model/config",
+                "readOnly": True,
+            },
+            {
+                "name": "model-secrets",
+                "mountPath": "/etc/model/secrets",
+                "readOnly": True,
+            },
+            {"name": "podinfo", "mountPath": "/etc/podinfo", "readOnly": True,},
+        ]
+
+        volumes = [
+            {"name": "model-config", "configMap": {"name": f"{service.name}-config",},},
+            {
+                "name": "model-secrets",
+                "secret": {
+                    "secretName": f"{service.name}-secrets",
+                    "defaultMode": 0o511,
+                },
+            },
+            {
+                "name": "podinfo",
+                "downwardAPI": {
+                    "items": [
+                        {
+                            "path": "labels",
+                            "fieldRef": {"fieldPath": "metadata.labels",},
+                        },
+                        {
+                            "path": "annotations",
+                            "fieldRef": {"fieldPath": "metadata.annotations",},
+                        },
+                    ],
+                },
+            },
+        ]
+
+        # Handle any files which should be templatized and mapped into the container
+        for filespec in service.files:
+            template = filespec.get("template")
+            container_path = filespec.get("container_path")
+            if not template:
+                raise exceptions.ConfigurationError(
+                    f"file directive for service {service.name} doesn't define template"
+                )
+            if not container_path:
+                raise exceptions.ConfigurationError(
+                    f"file directive for service {service.name} is missing container_path directive"
+                )
+
+            name = str(Path(container_path).name)
+            output.add(
+                f"resources/{graph.name}-{service.name}-{template}",
+                service.render_template(template),
+                self,
+                format="raw",
+                service=service,
+                graph=graph,
+            )
+            volumeMounts.append(
+                dict(name=name, mountPath=container_path, readOnly=True)
+            )
+            volumes.append(
+                dict(name=name, configMap=dict(name=f"{service.name}-{template}"))
+            )
+
         pod_labels = {
             "app": service.name,
             "version": str(service.entity.version),
@@ -117,57 +189,10 @@ class Kubernetes:
                                 "imagePullPolicy": "IfNotPresent",
                                 "ports": dports,
                                 "env": senv,
-                                "volumeMounts": [
-                                    {
-                                        "name": "model-config",
-                                        "mountPath": "/etc/model/config",
-                                        "readOnly": True,
-                                    },
-                                    {
-                                        "name": "model-secrets",
-                                        "mountPath": "/etc/model/secrets",
-                                        "readOnly": True,
-                                    },
-                                    {
-                                        "name": "podinfo",
-                                        "mountPath": "/etc/podinfo",
-                                        "readOnly": True,
-                                    },
-                                ],
+                                "volumeMounts": volumeMounts,
                             },
                         ],
-                        "volumes": [
-                            {
-                                "name": "model-config",
-                                "configMap": {"name": f"{service.name}-config",},
-                            },
-                            {
-                                "name": "model-secrets",
-                                "secret": {
-                                    "secretName": f"{service.name}-secrets",
-                                    "defaultMode": 0o511,
-                                },
-                            },
-                            {
-                                "name": "podinfo",
-                                "downwardAPI": {
-                                    "items": [
-                                        {
-                                            "path": "labels",
-                                            "fieldRef": {
-                                                "fieldPath": "metadata.labels",
-                                            },
-                                        },
-                                        {
-                                            "path": "annotations",
-                                            "fieldRef": {
-                                                "fieldPath": "metadata.annotations",
-                                            },
-                                        },
-                                    ],
-                                },
-                            },
-                        ],
+                        "volumes": volumes,
                         # see https://kubernetes.io/docs/concepts/workloads/pods/pod-topology-spread-constraints/#spread-constraints-for-pods
                         # "topologySpreadConstraints": [
                         #    {
@@ -307,6 +332,7 @@ class Kustomize:
         # one and update the deployments reference to it.
         # The Kubernetes plugin should have registered a config map to
         # the output.
+
         context = dict(
             name=f"{service.name}-config",
             namespace=graph.name,
@@ -333,6 +359,23 @@ class Kustomize:
             schema={"mergeStrategy": "append"},
         )
 
+        # If the service has "files" which should be mapped into the container
+        # this will be registered here as well
+        for file in service.files:
+            fn = file.get("template")
+            context = dict(
+                name=f"{service.name}-{fn}",
+                namespace=graph.name,
+                files=[f"resources/{graph.name}-{service.name}-{fn}"],
+            )
+
+            output.update(
+                self.fn,
+                data={"data.configMapGenerator": [context]},
+                plugin=self,
+                schema={"mergeStrategy": "append"},
+            )
+
     def fini(self, graph, output):
         # XXX: temp workaround till we assign outputs to layers
         if isinstance(output, render.FileRenderer):
@@ -342,6 +385,7 @@ class Kustomize:
             e.name for e in sorted(output.filter(plugin=self), key=lambda x: x.name)
         ]
         files = list(filter(lambda x: not x.startswith("configs/"), files))
+        files = list(filter(lambda x: not x.startswith("resources/"), files))
         output.update(self.fn, {"data.resources": files}, self)
 
 
@@ -370,45 +414,52 @@ class RuntimeImpl:
         m = self.method_lookup("service_addr")
         return m(service, graph)
 
-    def render(self, graph, outputs):
-        # Run three phases populating data dicts into outputs
-        # then run the renderer to create output data dicts
-        # NOTE: we use data dicts here rather than the python-kube API
-        # because we want to allow various plugins to operate on the data
-        # rather than produce a single API call. Using the API would have the
-        # advantage that we'd expect some validate, however the ability to break
-        # this into layers here wins, actually applying this to the runtime (k8s)
-        # will validate the results.
 
-        for plugin in self.plugins:
+## WIP
+def render_graph(graph, outputs):
+    # TODO: split the rendering of relations to support 1/2 living in another runtime
+    #       ex render_relation_ep(relation.ep)
+    runtimes = set()
+    # 1st collect all the runtimes referenced in the graph
+    for obj in graph.services:
+        runtimes.add(obj.runtime)
+
+    for runtime in runtimes:
+        for plugin in runtime.plugins:
             m = getattr(plugin, "init", None)
             if m:
                 m(graph, outputs)
 
-        for phase in ["pre_", "", "post_"]:
-            # dynamic method resolution in the form of
-            # <phase>_render_<kind.lower>
-            for obj in itertools.chain(graph.services, graph.relations):
-                for plugin in self.plugins:
+    # Here we must resolve the correct runtime to process each
+    for phase in ["pre_", "", "post_"]:
+        # dynamic method resolution in the form of
+        # <phase>_render_<kind.lower>
+        for obj in graph.services:
+            runtime = obj.runtime
+            for plugin in runtime.plugins:
+                kind = obj.kind.lower()
+                mn = f"{phase}render_{kind}"
+                m = getattr(plugin, mn, None)
+                if m:
+                    m(obj, graph, outputs)
+        # XXX: This is more complex as we'd like each relation endpoint to be able to
+        # belong to a different runtime
+        # FIXME: for now this is the current behavior (which could be odd without per-endpoint runtime rendering)
+        for obj in graph.relations:
+            for endpoint in obj.endpoints:
+                runtime = endpoint.service.runtime
+                for plugin in runtime.plugins:
                     kind = obj.kind.lower()
                     mn = f"{phase}render_{kind}"
                     m = getattr(plugin, mn, None)
                     if m:
                         m(obj, graph, outputs)
 
-        for plugin in self.plugins:
+    for runtime in runtimes:
+        for plugin in runtime.plugins:
             m = getattr(plugin, "fini", None)
             if m:
                 m(graph, outputs)
-
-        return outputs
-
-
-def render_graph(graph, outputs):
-    # TODO: like above render() but resolve the runtime from each object
-    # TODO: split the rendering of relations to support 1/2 living in another runtime
-    #       ex render_relation_ep(relation.ep)
-    pass
 
 
 def resolve(runtime_name, store):

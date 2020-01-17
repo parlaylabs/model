@@ -11,6 +11,7 @@ from jsonschema import validate
 from jsonschema.exceptions import ValidationError
 from pathlib import Path
 
+from . import template
 from . import utils
 
 
@@ -41,7 +42,50 @@ class Entity:
 
     def add_facet(self, data, src_ref):
         self.__data.new_child(data)
+        if (
+            isinstance(src_ref, str)
+            and not src_ref.startswith("http://")
+            and not src_ref.startswith("https://")
+            and (not src_ref.startswith("<") and not src_ref.endswith(">"))
+        ):
+            src_ref = Path(src_ref).absolute()
         self.src_ref.append(src_ref)
+
+    def relative_file(self, name=None, offset=0):
+        """return a base directory or uri from which to resolve internal component references
+        This defaults to the directory holding the imported file or if pull remotely the base uri.
+        """
+        base = "."
+        if self.src_ref:
+            # Don't use any overlays as the default (unless we want to use this to build a search path)
+            base = self.src_ref[offset]
+        if isinstance(base, str):
+            if base.startswith("http://") or base.startswith("https://"):
+                base = utils.uri_relative(base, name)
+            elif base.startswith("<") and base.endswith(">"):
+                # Convention of internally managed facets
+                # which don't have a real path
+                return None
+        else:
+            if name:
+                base = "file://" + str(Path(base).parent / name)
+            else:
+                base = "file://" + str(Path(base).parent)
+        return base
+
+    def file_search_path(self, name=None):
+        paths = {}
+        # Here we exploit the properties of ordered dicts to unique the keys
+        # while keeping order
+        for i in range(len(self.src_ref)):
+            paths[self.relative_file(name=name, offset=i)] = 1
+        return list(filter(None, paths.keys()))
+
+    def template_from_file(self, name, jinja_env=None):
+        if not jinja_env:
+            jinja_env = template.get_env()
+        paths = self.file_search_path(name)
+        return jinja_env.select_template(paths)
 
     def __hash__(self):
         return hash((self.__data["name"], self.__data["kind"]))
@@ -93,7 +137,7 @@ class Entity:
         ref = ""
         if self.src_ref:
             ref = f"@{self.src_ref}"
-        return f"<Entity {self.kind}::{self.name} {self.serialized()}{ref}>"
+        return f"<Entity {self.kind}::{self.name} {ref}>"
 
     @property
     def data(self):
@@ -102,7 +146,6 @@ class Entity:
 
     @property
     def facets(self):
-        maps = self.__data.maps
+        maps = self.__data._maps
         refs = self.src_ref
         return tuple(reversed(tuple(zip(maps, refs))))
-

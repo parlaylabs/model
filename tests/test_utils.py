@@ -66,3 +66,16 @@ def test_fake_fstring():
     data = utils.AttrAccess(dict(obj=utils.AttrAccess({"name": "foo"})))
     assert utils.fstring("{obj.name} and {40 + 2}", data) == "foo and 42"
 
+
+def test_uri_relative():
+    assert (
+        utils.uri_relative("http://github.com/bcsaller/myapp/component.yaml")
+        == "http://github.com/bcsaller/myapp"
+    )
+    assert (
+        utils.uri_relative(
+            "http://github.com/bcsaller/myapp/component.yaml", "README.md"
+        )
+        == "http://github.com/bcsaller/myapp/README.md"
+    )
+

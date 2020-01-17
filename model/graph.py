@@ -6,7 +6,9 @@ from typing import Any, Dict
 import jsonmerge
 
 from . import entity
+from . import exceptions
 from . import model
+from . import render
 from . import runtime as runtime_impl
 from . import store
 from . import utils
@@ -56,6 +58,12 @@ class Graph:
         # in the actual graph, but that can be ok for now
         return getattr(self.store, key)
 
+    def render(self, outputs=None):
+        if outputs is None:
+            outputs = render.FileRenderer("-")
+        runtime_impl.render_graph(self, outputs)
+        outputs.write()
+
 
 def plan(graph_entity, store, environment, runtime=None):
     # runtime is provided as a default, it can/should be overridden and resolved per Service
@@ -80,7 +88,9 @@ def plan(graph_entity, store, environment, runtime=None):
         # certain reuable configs none the less
         config = service_spec.get("config", {})
         if not comp:
-            raise ValueError(f"graph references unknown component {service_spec}")
+            raise exceptions.ConfigurationError(
+                f"graph references unknown component {service_spec}"
+            )
 
         # Combine graph config with raw component data as a new facet on the entity
         # XXX: src could/should be a global graph reference
@@ -89,9 +99,14 @@ def plan(graph_entity, store, environment, runtime=None):
         exposed = service_spec.get("expose", [])
         for ep in exposed:
             if not utils.pick(c_eps, name=ep):
-                raise ValueError(f"Unable to expose unknown endpoint {ep}")
+                raise exceptions.ConfigurationError(
+                    f"Unable to expose unknown endpoint {ep}"
+                )
 
-        s = model.Service(entity=comp, name=name, runtime=runtime, config=config)
+        srt = service_spec.get("runtime", graph_entity.get("runtime", runtime))
+        if isinstance(srt, str):
+            srt = runtime_impl.resolve(srt, store)
+        s = model.Service(entity=comp, name=name, runtime=srt, config=config)
         for ep in c_eps:
             # look up a known interface if it exists and use
             # its values as defaults
@@ -129,7 +144,7 @@ def plan(graph_entity, store, environment, runtime=None):
             ifaces.add(ep.interface.qual_name)
             endpoints.append(ep)
         if len(ifaces) != 1:
-            raise ValueError(
+            raise exceptions.ConfigurationError(
                 f"More than one interface used in relation {relation} {ifaces}"
             )
         r = model.Relation(endpoints=endpoints)
@@ -143,7 +158,7 @@ def plan(graph_entity, store, environment, runtime=None):
         entity=graph_entity,
         nodes=list(services.values()),
         edges=list(relations.values()),
-        runtime=runtime,
+        runtime=runtime_impl.resolve(graph_entity.get("runtime", runtime), store),
         environment=environment,
         interfaces=interface_impls,
         store=store,
@@ -153,7 +168,7 @@ def plan(graph_entity, store, environment, runtime=None):
 
 
 def apply(graph, store, runtime, ren):
-    runtime.render(graph, ren)
+    runtime_impl.render_graph(graph, ren)
     ren.write()
 
 

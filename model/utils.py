@@ -4,6 +4,8 @@ import functools
 import itertools
 import json
 import re
+import urllib.parse
+
 from collections import ChainMap
 from dataclasses import fields
 from pathlib import Path
@@ -23,7 +25,10 @@ class AttrAccess(dict):
         return v
 
     def __getitem__(self, key):
-        v = super().__getitem__(key)
+        try:
+            v = super().__getitem__(key)
+        except KeyError as e:
+            raise AttributeError(key)
         if isinstance(v, dict):
             v = self.__class__(v)
         return v
@@ -300,3 +305,16 @@ def apply_to_dataclass(cls, **kwargs):
         if f and f.init is not False:
             args[k] = kwargs[k]
     return cls(**args)
+
+
+def uri_relative(uri, name=None):
+    parts = urllib.parse.urlsplit(uri)
+    parts = list(parts)
+    path = Path(parts[2]).parent
+    if name:
+        parts[2] = (path / name).resolve()
+    else:
+        parts[2] = path
+    parts[2] = str(parts[2])
+    return urllib.parse.urlunsplit(parts)
+

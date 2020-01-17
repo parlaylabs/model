@@ -35,6 +35,13 @@ class GraphObj:
     def __hash__(self):
         return hash((self.name, self.kind))
 
+    def get_template(self, key):
+        # Support getting a jinja2 template relative to defintion
+        # of any graph obj.
+        # just invoke render(ctx) as needed
+        template = self.entity.template_from_file(key)
+        return template
+
 
 @dataclass
 class Runtime(GraphObj):
@@ -45,8 +52,7 @@ class Runtime(GraphObj):
 
     @property
     def impl(self):
-        # XXX: bad shortcut
-        return self.graph.qual_name[f"RuntimeImpl:{self.name}"]
+        return self.graph.runtime[self.name]
 
     def __hash__(self):
         return hash((self.name, self.kind))
@@ -171,7 +177,7 @@ class Service(GraphObj):
         remote = relation.get_remote(self)
         local = relation.get_local(self)
         context = dict(
-            service=remote,
+            service=remote.service,
             local=local,
             this=self,
             relation=relation,
@@ -184,7 +190,7 @@ class Service(GraphObj):
         else:
             base = remote.provided
         base["interface"] = local.interface.qual_name
-        base["service"] = remote.service.name
+        base["service_name"] = remote.service.name
         data = {local.name: base}
 
         return utils.interpolate(data, context)
@@ -221,6 +227,24 @@ class Service(GraphObj):
             ctx[f"{name}_remote"] = remote
         return ctx
 
+    @property
+    def context(self):
+        env_config = self.graph.environment.get("config", {})
+        service_config = env_config.get("services", {}).get(self.name, {})
+        composed = jsonmerge.merge(self.config, service_config)
+        # XXX: resolve references to overlay vars from service_config.config
+        # into the endpoint data as a means of setting runtime values
+        # TODO: we should be able to reference vault and/or other secret mgmt tools
+        # here do reference actual credentials
+        context = dict(service=self, this=self, **env_config)
+        context.update(composed)
+
+        # XXX: This could filter down to only the connected relation but
+        # for now we do all
+        ctx = self.build_context_from_endpoints()
+        context.update(ctx)
+        return context
+
     def full_config(self):
         # There might be config for the service in either/both the graph and the environment.
         # The env will take priority as the graph object can be reusable but the env contains
@@ -240,6 +264,18 @@ class Service(GraphObj):
         ctx = self.build_context_from_endpoints()
         context.update(ctx)
         return utils.interpolate(composed, context)
+
+    @property
+    def annotations(self):
+        return utils.AttrAccess(self.entity.get("annotations", {}))
+
+    @property
+    def files(self):
+        return self.entity.get("files", [])
+
+    def render_template(self, name):
+        template = self.get_template(name)
+        return template.render(self.context)
 
 
 @dataclass
