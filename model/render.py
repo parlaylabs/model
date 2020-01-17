@@ -121,6 +121,9 @@ class DirectoryRenderer(Renderer):
                     yaml.dump_all(data, stream=fp)
                 elif fmt == "json":
                     fp.write(utils.dump(data))
+                elif fmt == "raw":
+                    # In this case we should have pushed string data already in the proper format
+                    fp.write(data)
 
 
 class FileRenderer(Renderer):
