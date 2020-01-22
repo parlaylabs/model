@@ -111,13 +111,15 @@ def load_config(store, config_dir):
 
 # v1 schema definitions
 # XXX: These must actually be versioned in the future
+strprop = dict(type="string")
 register(
     "Graph",
     schema={
         "$schema": "http://json-schema.org/draft-08/schema#",
         "properties": {
-            "name": dict(type="string"),
-            "kind": dict(type="string"),
+            "name": strprop,
+            "kind": strprop,
+            "runtime": strprop,
             "services": {"type": "array", "items": {"type": "object",},},
             "relations": {
                 "type": "array",
@@ -131,3 +133,66 @@ register(
     },
 )
 
+register(
+    "Component",
+    schema={
+        "$schema": "http://json-schema.org/draft-08/schema#",
+        "properties": {
+            "name": strprop,
+            "kind": strprop,
+            "image": strprop,
+            "version": strprop,
+            "files": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {"template": strprop, "container_path": strprop,},
+                },
+            },
+            "endpoints": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {"name": strprop, "interface": strprop,},
+                },
+            },
+        },
+        "required": ["name", "kind", "version"],
+    },
+)
+
+register(
+    "Interface",
+    schema={
+        "$schema": "http://json-schema.org/draft-08/schema#",
+        "properties": {
+            "name": strprop,
+            "kind": strprop,
+            "version": strprop,
+            # XXX: wildcard role or change format so lhs isn't data
+            # "role": {"type": "object"},
+            "role": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "name": strprop,
+                        "provides": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "name": strprop,
+                                    "type": strprop,
+                                    "default": strprop,
+                                },
+                            },
+                            "required": ["name", "type"],
+                        },
+                    },
+                },
+            },
+        },
+        "required": ["name", "kind", "version", "role"],
+    },
+)
