@@ -109,7 +109,8 @@ class Store:
             o = getattr(index, indexName, _marker)
             if o is not _marker:
                 return o
-        raise AttributeError(indexName)
+        return {}
+        # raise AttributeError(indexName)
 
     def addIndexer(self, indexer):
         """Indexer should produce one or more dict like index objects"""
