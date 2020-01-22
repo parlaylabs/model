@@ -81,10 +81,12 @@ class Entity:
             paths[self.relative_file(name=name, offset=i)] = 1
         return list(filter(None, paths.keys()))
 
-    def template_from_file(self, name, jinja_env=None):
+    def get_template(self, name, jinja_env=None, extra=None):
         if not jinja_env:
             jinja_env = template.get_env()
         paths = self.file_search_path(name)
+        if extra:
+            path = extra.file_search_path(name) + paths
         return jinja_env.select_template(paths)
 
     def __hash__(self):
@@ -97,7 +99,7 @@ class Entity:
             defaults = schema.schema_defaults(schema)
             # Note that here we take advantage of jsonmerge's schema annotations to drive the merge behavior.
             merger = jsonmerge.Merger(schema)
-            defaults = merger.merge(defaults, data)
+            defaults = merger.merge(defaults, dict(data))
         else:
             defaults = data
         return cls(defaults, schema, src_ref)
