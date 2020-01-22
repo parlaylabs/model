@@ -2,7 +2,7 @@ kind: Interface
 name: http
 version: 1.1
 role:
-  server:
+  - name: server
     provides:
       - { name: address, default: "{service.service_addr}", type: str }
       - { name: port, default: 80 }

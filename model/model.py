@@ -39,8 +39,18 @@ class GraphObj:
         # Support getting a jinja2 template relative to defintion
         # of any graph obj.
         # just invoke render(ctx) as needed
-        template = self.entity.template_from_file(key)
+        # Env is prepended to the search path here because its location represents a
+        # logical play to look for overridden templates
+        template = self.entity.get_template(key, extra=self.graph.environment.entity)
         return template
+
+    def fini(self):
+        self._interpolate_entity()
+
+    def _interpolate_entity(self):
+        data = self.entity.serialized()
+        data = utils.interpolate(data, self.context)
+        self.entity.add_facet(data, "<interpolated>")
 
 
 @dataclass
@@ -94,6 +104,7 @@ class Service(GraphObj):
         return hash((self.name, self.kind))
 
     def fini(self):
+        super().fini()
         self._populate_endpoint_config()
 
     def _populate_endpoint_config(self):
@@ -291,7 +302,7 @@ class Interface(GraphObj):
     name: str
     kind: str = field(init=False, default="Interface")
     version: str
-    roles: Dict[str, List[Dict[str, Any]]]
+    roles: List[List[Dict[str, Any]]]
     data: Dict[str, Any] = field(init=False, repr=False)
 
     @property
@@ -317,7 +328,7 @@ class Interface(GraphObj):
         vals = rservice.full_relation(rel)
         priv = rservice.full_relation(rel, secrets=True)
         vals = jsonmerge.merge(vals, priv)
-        specs = self.roles[endpoint.role].get("provides", [])
+        specs = utils.pick(self.roles, name=endpoint.role).get("provides", [])
         type_map = {"str": str, "string": str, "int": int, "number": (int, float)}
         for spec in specs:
             name = spec["name"]
@@ -350,7 +361,7 @@ class Endpoint:
 
     @property
     def config(self):
-        c = self.interface.roles.get(self.role)
+        c = utils.pick(self.interface.roles, name=self.role)
         if not c:
             c = {}
         return c

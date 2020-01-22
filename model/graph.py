@@ -84,13 +84,13 @@ def plan(graph_entity, store, environment, runtime=None):
         name = service_spec.get("name")
         cname = service_spec.get("component", name)
         comp = store.component.get(cname)
-        # Commonly config comes from the env object, not the graph but we support
-        # certain reuable configs none the less
-        config = service_spec.get("config", {})
         if not comp:
             raise exceptions.ConfigurationError(
                 f"graph references unknown component {service_spec}"
             )
+        # Commonly config comes from the env object, not the graph but we support
+        # certain reuable configs none the less
+        config = service_spec.get("config", {})
 
         # Combine graph config with raw component data as a new facet on the entity
         # XXX: src could/should be a global graph reference
@@ -106,19 +106,24 @@ def plan(graph_entity, store, environment, runtime=None):
         srt = service_spec.get("runtime", graph_entity.get("runtime", runtime))
         if isinstance(srt, str):
             srt = runtime_impl.resolve(srt, store)
+
         s = model.Service(entity=comp, name=name, runtime=srt, config=config)
         for ep in c_eps:
             # look up a known interface if it exists and use
             # its values as defaults
-            addresses = ep.get("addresses", [])
             iface_name, _, iface_role = ep["interface"].partition(":")
             if iface_name not in interface_impls:
-                print(
+                log.warning(
                     f"endpoint {ep} using unregistered interface {iface_name} for Service {s.name}"
                 )
             # XXX: this would have to improve and be version aware if its
             # going to work this way.
-            iface = interface_impls.get(iface_name, {})
+            iface = interface_impls.get(iface_name, utils.AttrAccess(name=iface_name))
+            if not iface or not utils.pick(iface.roles, name=iface_role):
+                raise exceptions.ConfigurationError(
+                    f"""Interface not defined or missing expected role '{iface_role}' for '{iface_name}' in Service '{s.name}'. 
+                    Interface for endpoints should be defined as interface_name:role."""
+                )
             ep = s.add_endpoint(name=ep["name"], interface=iface, role=iface_role)
             log.debug(f"adding endpoint to service {s.name} {ep.qual_name}")
 
@@ -136,13 +141,13 @@ def plan(graph_entity, store, environment, runtime=None):
         for ep_spec in relation:
             sname, _, epname = ep_spec.partition(":")
             s = services[sname]
-            ep = s.endpoints[epname]
+            ep = s.endpoints.get(epname)
             if not ep:
                 log.warn(f"Unable to find endpoint {epname} for {relation} on {s.name}")
             else:
                 log.debug(f"planned {ep_spec} for {relation} {ep}")
-            ifaces.add(ep.interface.qual_name)
-            endpoints.append(ep)
+                ifaces.add(ep.interface.qual_name)
+                endpoints.append(ep)
         if len(ifaces) != 1:
             raise exceptions.ConfigurationError(
                 f"More than one interface used in relation {relation} {ifaces}"
@@ -163,7 +168,6 @@ def plan(graph_entity, store, environment, runtime=None):
         interfaces=interface_impls,
         store=store,
     )
-    # view(g)
     return g
 
 

@@ -98,7 +98,7 @@ kind: Interface
 name: mysql
 version: 5.7
 role:
-  server:
+  - name: server
     uses:
       - { name: username, type: str }
       - { name: password, type: str, secret: true }
@@ -107,7 +107,8 @@ role:
       - { name: port, default: "3306", type: str }
       - { name: admin_user, type: str, default: "root" }
       - { name: admin_password, type: str, secret: true }
-  client: {}
+  - name: client
+    provides: {}
 ```
 
 **Environment**
