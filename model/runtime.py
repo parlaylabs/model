@@ -223,7 +223,7 @@ class Kubernetes:
         if docker:
             pull_secret = docker.image_secrets_for(default_container["image"])
             if pull_secret:
-                container_spec["ImagePullSecret"] = [
+                container_spec["template"]["spec"]["imagePullSecrets"] = [
                     {"name": utils.filename_to_label(pull_secret.key)}
                 ]
                 output.add(
