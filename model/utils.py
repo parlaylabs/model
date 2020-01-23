@@ -317,3 +317,9 @@ def uri_relative(uri, name=None):
     parts[2] = str(parts[2])
     return urllib.parse.urlunsplit(parts)
 
+
+def filename_to_label(filename):
+    f = filename.replace(".", "-")
+    f = f.replace("_", "-")
+    return f
+

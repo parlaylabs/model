@@ -5,6 +5,7 @@ from typing import List
 
 import yaml
 
+from . import docker
 from . import exceptions
 from . import render
 from . import utils
@@ -21,6 +22,35 @@ def register(cls):
 @dataclass
 class RuntimePlugin:
     name: str
+
+
+@register
+@dataclass
+class Docker:
+    name: str = field(init=False, default="Docker")
+
+    def init(self, graph, outputs):
+        # Parse the users docker conf file
+        # and record a list of logins we know about
+        self.auths = set()
+        self.cfg = None
+        self.graph = graph
+        self.image_pull_secrets = {}
+        cfg = docker.parse_config()
+        if cfg:
+            self.auths |= set(cfg.get("auths").keys())
+            self.cfg = cfg
+
+    def image_secrets_for(self, image):
+        m = docker.parse_docker_tag(image)
+        if m["domain"] not in self.auths:
+            return None
+        r = utils.AttrAccess(
+            auth=docker.auth_for(self.cfg, m["domain"]),
+            key=f"{self.graph.name}-{m['domain']}",
+        )
+        self.image_pull_secrets[r.key] = r
+        return r
 
 
 @register
@@ -42,7 +72,7 @@ class Kubernetes:
     def render_service(self, service, graph, output):
         # push out a deployment
         ports = service.ports
-        # XXX: ServiceAccountName
+        # XXX: Protocol support
         dports = []
         for p in ports:
             dports.append(dict(containerPort=int(p["port"]), protocol="TCP"))
@@ -144,8 +174,10 @@ class Kubernetes:
                 )
 
             name = str(Path(container_path).name)
+            name = utils.filename_to_label(name)
+            fn = utils.filename_to_label(template)
             output.add(
-                f"resources/{graph.name}-{service.name}-{template}",
+                f"resources/{graph.name}-{service.name}-{fn}",
                 service.render_template(template),
                 self,
                 format="raw",
@@ -155,15 +187,53 @@ class Kubernetes:
             volumeMounts.append(
                 dict(name=name, mountPath=container_path, readOnly=True)
             )
-            volumes.append(
-                dict(name=name, configMap=dict(name=f"{service.name}-{template}"))
-            )
+            volumes.append(dict(name=name, configMap=dict(name=f"{service.name}-{fn}")))
 
         pod_labels = {
             "app": service.name,
             "version": str(service.entity.version),
         }
         pod_labels.update(labels)
+
+        default_container = {
+            "name": service.name,
+            "image": service.entity.image,
+            "imagePullPolicy": "IfNotPresent",
+            "volumeMounts": volumeMounts,
+        }
+        if dports:
+            default_container["ports"] = dports
+        if senv:
+            default_container["env"] = senv
+
+        container_spec = {
+            "replicas": service.entity.get("replicas"),
+            "selector": {"matchLabels": {"app.kubernetes.io/name": service.name}},
+            "template": {
+                "metadata": {"labels": pod_labels},
+                "spec": {
+                    "restartPolicy": "Always",
+                    "containers": [default_container,],
+                    "volumes": volumes,
+                },
+            },
+        }
+        # see if we need ImagePullSecrets based on defaultContainer
+        docker = self.runtime_impl.plugin("Docker")
+        if docker:
+            pull_secret = docker.image_secrets_for(default_container["image"])
+            if pull_secret:
+                container_spec["ImagePullSecret"] = [
+                    {"name": utils.filename_to_label(pull_secret.key)}
+                ]
+                output.add(
+                    f"configs/{pull_secret.key}",
+                    pull_secret.auth,
+                    self,
+                    format="json",
+                    service=service,
+                    graph=graph,
+                )
 
         deployment = {
             "apiVersion": "apps/v1",
@@ -173,37 +243,7 @@ class Kubernetes:
                 "namespace": graph.name,
                 "name": service.name,
             },
-            "spec": {
-                "replicas": service.entity.get("replicas"),
-                "selector": {"matchLabels": {"app.kubernetes.io/name": service.name}},
-                "template": {
-                    "metadata": {"labels": pod_labels},
-                    "spec": {
-                        "restartPolicy": "Always",
-                        "containers": [
-                            # XXX: join with context/runtime container registry
-                            # XXX: model and support cross cutting concerns here
-                            {
-                                "name": service.name,
-                                "image": service.entity.image,
-                                "imagePullPolicy": "IfNotPresent",
-                                "ports": dports,
-                                "env": senv,
-                                "volumeMounts": volumeMounts,
-                            },
-                        ],
-                        "volumes": volumes,
-                        # see https://kubernetes.io/docs/concepts/workloads/pods/pod-topology-spread-constraints/#spread-constraints-for-pods
-                        # "topologySpreadConstraints": [
-                        #    {
-                        ##        "topologyKey": service.name,
-                        #       "whenUnsatisfiable": "ScheduleAnyway",
-                        #       "labelSelector": {"name": service.name},
-                        #   }
-                        # ],
-                    },
-                },
-            },
+            "spec": container_spec,
         }
 
         output.add(
@@ -229,15 +269,18 @@ class Kubernetes:
             "metadata": {"namespace": graph.name, "name": service.name},
             "spec": {
                 "selector": {"app": service.name},
-                "ports": ports,
                 # XXX: specify elb/nlb annotations when url is AWS
                 # see https://kubernetes.io/docs/concepts/services-networking/service/#connection-draining-on-aws
                 # https://kubernetes.io/docs/concepts/services-networking/service/#aws-nlb-support
             },
         }
-        output.add(
-            f"50-{service.name}-service.yaml", serviceSpec, self, service=service
-        )
+
+        if ports:
+            serviceSpec["spec"]["ports"] = ports
+            # Only render the service if we have defined ports.
+            output.add(
+                f"50-{service.name}-service.yaml", serviceSpec, self, service=service
+            )
 
 
 @register
@@ -267,7 +310,7 @@ class Istio:
         ns_out = f"00-{graph.name}-namespace.yaml"
         if ns_out in output:
             ent = output.index[ns_out]
-            ent.data["metadata"]["labels"]["istio-injection"] = True
+            ent.data["metadata"]["labels"]["istio-injection"] = "true"
 
     def render_service(self, service, graph, output):
         # FIXME: we will need the ability to handle any type of endpoint the sevice exposes
@@ -363,6 +406,7 @@ class Kustomize:
         # this will be registered here as well
         for file in service.files:
             fn = file.get("template")
+            fn = utils.filename_to_label(fn)
             context = dict(
                 name=f"{service.name}-{fn}",
                 namespace=graph.name,
@@ -375,6 +419,25 @@ class Kustomize:
                 plugin=self,
                 schema={"mergeStrategy": "append"},
             )
+
+        # If docker plugin is part of the runtime pull it now and use it to check if there
+        # are pull secrets we have to register
+        docker = self.runtime_impl.plugin("Docker")
+        if docker:
+            if docker.image_pull_secrets:
+                for ps in docker.image_pull_secrets.values():
+                    context = dict(
+                        name=utils.filename_to_label(ps.key),
+                        namespace=graph.name,
+                        files=[f"configs/{ps.key}"],
+                    )
+
+                    output.update(
+                        self.fn,
+                        data={"data.secretGenerator": [context]},
+                        plugin=self,
+                        schema={"mergeStrategy": "append"},
+                    )
 
     def fini(self, graph, output):
         # XXX: temp workaround till we assign outputs to layers
@@ -394,6 +457,13 @@ class RuntimeImpl:
     name: str = field(hash=True)
     kind: str = field(init=False, hash=True, default="RuntimeImpl")
     plugins: List[RuntimePlugin] = field(hash=False)
+
+    def __post_init__(self):
+        for p in self.plugins:
+            setattr(p, "runtime_impl", self)
+
+    def plugin(self, key):
+        return utils.pick(self.plugins, name=key)
 
     @property
     def qual_name(self):

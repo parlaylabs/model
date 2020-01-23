@@ -59,7 +59,7 @@ def _match_plugin(item, query):
 class Renderer(list):
     def __init__(self, root=None):
         self.root = Path(root)
-        self.index = {}  # name -> ent
+        self.index = {}  # name -> Output
 
     def add(self, name, data, plugin, **kwargs):
         if name in self.index:

@@ -1,6 +1,7 @@
 kind: Runtime
 name: kubernetes
 plugins:
+    - name: Docker
     - name: Kubernetes
     - name: Istio
     - name: Kustomize
