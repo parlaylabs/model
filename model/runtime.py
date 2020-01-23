@@ -1,4 +1,6 @@
+import base64
 import itertools
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List
@@ -226,13 +228,24 @@ class Kubernetes:
                 container_spec["template"]["spec"]["imagePullSecrets"] = [
                     {"name": utils.filename_to_label(pull_secret.key)}
                 ]
+                # Manually Generate the pull secret as its special formatting needs
+                # not supported by the kustomize secrets generator
+                sec = {
+                    "apiVersion": "v1",
+                    "kind": "Secret",
+                    "metadata": {
+                        "name": utils.filename_to_label(pull_secret.key),
+                        "namespace": graph.name,
+                    },
+                    "data": {
+                        ".dockerconfigjson": base64.b64encode(
+                            json.dumps(pull_secret.auth).encode("utf-8")
+                        )
+                    },
+                    "type": "kubernetes.io/dockerconfigjson",
+                }
                 output.add(
-                    f"configs/{pull_secret.key}",
-                    pull_secret.auth,
-                    self,
-                    format="json",
-                    service=service,
-                    graph=graph,
+                    pull_secret.key, sec, self, service=service, graph=graph,
                 )
 
         deployment = {
@@ -419,25 +432,6 @@ class Kustomize:
                 plugin=self,
                 schema={"mergeStrategy": "append"},
             )
-
-        # If docker plugin is part of the runtime pull it now and use it to check if there
-        # are pull secrets we have to register
-        docker = self.runtime_impl.plugin("Docker")
-        if docker:
-            if docker.image_pull_secrets:
-                for ps in docker.image_pull_secrets.values():
-                    context = dict(
-                        name=utils.filename_to_label(ps.key),
-                        namespace=graph.name,
-                        files=[f"configs/{ps.key}"],
-                    )
-
-                    output.update(
-                        self.fn,
-                        data={"data.secretGenerator": [context]},
-                        plugin=self,
-                        schema={"mergeStrategy": "append"},
-                    )
 
     def fini(self, graph, output):
         # XXX: temp workaround till we assign outputs to layers
