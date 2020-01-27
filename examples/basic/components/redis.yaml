@@ -1,0 +1,9 @@
+kind: Component
+name: redis
+image: redis:5-buster
+version: "1"
+endpoints:
+  - name: redis
+    interface: redis:server
+    addresses:
+      - ports: [6379]

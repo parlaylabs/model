@@ -1,0 +1,11 @@
+# Override example with real values we don't want to check into public repo
+kind: Environment
+name: dev
+config:
+  public_dns: "scrupulo.us"
+  services:
+    mysql:
+      config:
+        - endpoint: "db"
+          data:
+            admin_password: "testing override"

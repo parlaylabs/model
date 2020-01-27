@@ -1,6 +1,6 @@
 kind: Interface
 name: mysql
-version: 5.7
+version: "5.7"
 role:
   - name: server
     uses:
