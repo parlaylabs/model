@@ -45,7 +45,7 @@ class Docker:
 
     def image_secrets_for(self, image):
         m = docker.parse_docker_tag(image)
-        if m["domain"] not in self.auths:
+        if not m or m["domain"] not in self.auths:
             return None
         r = utils.AttrAccess(
             auth=docker.auth_for(self.cfg, m["domain"]),
@@ -137,12 +137,29 @@ class Kubernetes:
         ]
 
         volumes = [
-            {"name": "model-config", "configMap": {"name": f"{service.name}-config",},},
+            {
+                "name": "model-config",
+                "configMap": {
+                    "name": f"{service.name}-config",
+                    "items": [
+                        {
+                            "key": f"{graph.name}-{service.name}-config.json",
+                            "path": f"{service.name}-config.json",
+                        }
+                    ],
+                },
+            },
             {
                 "name": "model-secrets",
                 "secret": {
                     "secretName": f"{service.name}-secrets",
                     "defaultMode": 0o511,
+                    "items": [
+                        {
+                            "key": f"{graph.name}-{service.name}-secrets.json",
+                            "path": f"{service.name}-secrets.json",
+                        }
+                    ],
                 },
             },
             {
@@ -186,10 +203,18 @@ class Kubernetes:
                 service=service,
                 graph=graph,
             )
-            volumeMounts.append(
-                dict(name=name, mountPath=container_path, readOnly=True)
+            cp = str(Path(container_path).parent / Path(container_path).stem)
+            volumeMounts.append(dict(name=name, mountPath=cp, readOnly=True))
+            key = f"{graph.name}-{service.name}-{fn}"
+            volumes.append(
+                dict(
+                    name=name,
+                    configMap=dict(
+                        name=f"{service.name}-{fn}",
+                        items=[dict(key=key, path=template)],
+                    ),
+                )
             )
-            volumes.append(dict(name=name, configMap=dict(name=f"{service.name}-{fn}")))
 
         pod_labels = {
             "app": service.name,
