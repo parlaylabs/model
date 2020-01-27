@@ -15,12 +15,13 @@ $ git clone https://github.com/parlaylabs/model.git
 $ cd model
 $ pipenv install
 $ pipenv shell
+$ pipenv install . 
 
 # To view the model which will run a server and view http://localhost:8080/
->$ model graph -c examples/basic/ develop
+>$ model graph -c examples/basic/ -c examples/interfaces develop
 
 # To render the model 
->$ model graph  -c examples/basic apply -o base
+>$ model graph  -c examples/basic -c examples/interfaces apply -o base
 ```
 
 Model
