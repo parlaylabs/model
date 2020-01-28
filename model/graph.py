@@ -45,6 +45,8 @@ class Graph:
         # Inject the graph objects belong to so they can resolve other objects
         for entity in self.nodes:
             entity.graph = self
+
+        for entity in self.nodes:
             fini = getattr(entity, "fini", None)
             if fini:
                 fini()
@@ -107,6 +109,7 @@ def plan(graph_entity, store, environment, runtime=None):
         if isinstance(srt, str):
             srt = runtime_impl.resolve(srt, store)
 
+        # XXX: we could/should merge env into config here
         s = model.Service(entity=comp, name=name, runtime=srt, config=config)
         for ep in c_eps:
             # look up a known interface if it exists and use
