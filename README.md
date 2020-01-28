@@ -16,13 +16,46 @@ $ cd model
 $ pipenv install
 $ pipenv shell
 $ pipenv install . 
+$ pipenv update -e .
 
-# To view the model which will run a server and view http://localhost:8080/
->$ model graph -c examples/basic/ -c examples/interfaces develop
+# To view the model which will run a server at http://localhost:8080/
+$ model graph -c examples/basic/ -c examples/interfaces develop
 
 # To render the model 
->$ model graph  -c examples/basic -c examples/interfaces apply -o base
+$ model graph  -c examples/basic -c examples/interfaces apply -o base
 ```
+
+Concepts
+--------
+
+**Component** - A Service definition of attributes and workload known at
+build time. These define the a reusable unit of deployment w/o runtime
+bindings. A Service then is the instantiation of a Component.
+
+**Endpoint** - An address, an interface and a version.
+
+**Environment** - A configuration representing where a model is to be run. This
+includes non-reusable parts of a deployment, such as things like the public DNS
+name associated with a runtime. 
+
+**Graph** - A set of interconnected Services. Nodes in the graph are
+Services and edges are Relations. A graph implements the same interface as
+Service externally using an optional system to promote Endpoints of
+included Services which can be exposed or referenced in another graph. This
+will allow hiding of implementation details while still allowing reuse. 
+
+**Interface** - A high level definition of a named protocol to expect. This is
+defined alongside a Endpoint and used to inform a Relation.
+
+**Relation** - A set of one or more endpoints and a selector that indicates activity.
+
+**Runtime** - Any compute platform for which a mapping from model to running
+code exists. By selecting among various plugins we can determine 'how' the
+model will be run. The Runtime object provides translations from the model to a deployment.
+
+**Services** - An address and interface through which business use cases are
+provided. Typically this includes some exposed IP address and an idea of how to
+communicate at that address. 
 
 Model
 =====
@@ -149,48 +182,16 @@ config:
 
 ```
 
-Config values (see config/services/mysql/config in example) will be overlaid onto the service and available for Variable Interpolation and Templating (see below). If the runtime is set to null we are indicating the deployment of the service isn't managed by model, however we can statically supply config as part of the environment here which will be available in relations to connect to.
-
-Concepts
---------
-
-**Service** - An address and interface through which business use cases are
-provided. Typically this includes some exposed IP address and an idea of how to
-comunicate at that address. 
-
-**Component** - An Service definition of attributes and workload known at
-build time. These define the a re-useable unit of deployment w/o runtime
-bindings. A Serivce then is the instansition of a Component.
-
-**Endpoint** - An address, an interface and a version
-
-**Environment** - A configuration representing where a model is to be run. This
-includes non-reuable parts of a deployment, such as things like the public DNS
-name associated with a runtime. 
-
-**Graph** - A set of interconnected Services. Nodes in the graph are
-Services and edges are Relations. A graph implements the same interface as
-Service externally using an optional system to promote Endpoints of
-included Services which can be exposed or referenced in another graph. This
-will allow hiding of implementation details while still allowing reuse. 
-
-**Interface** - A high level defintion of a named protocol to expect. This is
-defined alongside a Endpoint and used to inform a Relation.
-
-**Relation** - A set of one or more endpoints and a selector that indicates activity.
-
-**Runtime** - Any compute platform for which a mapping from model to running
-code exists. By selecting among various plugins we can determine 'how' the
-model will be run. The Runtime object provides translations from the model to a deployment.
+Config values (see config/services/mysql/config in example above) will be overlaid onto the service and available for [variable interpolation](#variable-interpolation) and [templating](#templates). If the runtime is set to null, we are indicating the deployment of the service isn't managed by model, however we can statically supply config as part of the environment here which will be available in relations to connect to.
 
 
-Variable Interpolation
+Variable Interpolation  <a name="variable-interpolation"></a>
 =======================
 
-Resources in the graph undergo a process of variable interpolation which allows them to flexibly address the definitions and configration of connected components within the graph. The Interface and Environment examples above show examples of this. While the data provided need further documentation it is fare to say common model objects will have 'this' and 'service' defined and relations will be available as '<endpoint name>'_relation, '<endpoint_name>'_local and '<endpoint_name>_remote' giving access to the attributes defined in model/model.py. This makes it easy to substitute values where needed.
+Resources in the graph undergo a process of variable interpolation which allows them to flexibly address the definitions and configration of connected components within the graph. The Interface and Environment examples above show examples of this. While the data provided need further documentation, it is fair to say common model objects will have `this` and `services` defined and relations will be available as `<endpoint name>`_relation, `<endpoint_name>`_local and `<endpoint_name>`_remote giving access to the attributes defined in model/model.py. This makes it easy to substitute values where needed.
 
 
-Templates
+Templates <a name="templates"></a>
 =========
 
 Components can define a **files** directive which will run Jinja2 templates with access to the full model context. These files will be mapped into the runtime (in the case of k8s as additional ConfigMaps/Volumes)
@@ -201,14 +202,13 @@ Components can define a **files** directive which will run Jinja2 templates with
       template: overrides.conf
   ```
 
-This allows for the easy inclusion of config files into the container which are still updated and managed via a ConfigMapGenerator. This means that change can easily force new deployment rollouts.
-
+This allows for the easy inclusion of config files into the container which are still updated and managed via a ConfigMapGenerator. This means that change can easily force new deployment rollout.
 
 
 Workflow
 =========
 
-Define components by adding component.yaml specs to git repos. Then register them against a well known endpoint for metadata. Each path into the repo defines a single reusable component. The relationship between component and repo is preserved such that changes in the repo can trigger lifecycle events in the model.
+Define components by adding component.yaml specs to git repos. Then register them against a well known endpoint for metadata. Each path into the repo defines a single reusable component. The relationship between component and repo is preserved such that changes in the repo can trigger life cycle events in the model.
 
 
 Runtime Operations
@@ -247,7 +247,7 @@ To enforce a rollout of a new version you might upgrade the components and then 
 Runtime
 =======
 
-While the notion of runtime as a set of model mapping plugins is flexible our first target is Kubernetes.
+While the notion of runtime as a set of model mapping plugins is flexible, our first target is Kubernetes.
 
 When the model is mapped to k8s a number of things are currently being done behind the scenes. 
 
