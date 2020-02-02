@@ -348,7 +348,7 @@ class Istio:
         ns_out = f"00-{graph.name}-namespace.yaml"
         if ns_out in output:
             ent = output.index[ns_out]
-            ent.data["metadata"]["labels"]["istio-injection"] = "true"
+            ent.data["metadata"]["labels"]["istio-injection"] = "enabled"
 
     def render_service(self, service, graph, output):
         # FIXME: we will need the ability to handle any type of endpoint the sevice exposes
