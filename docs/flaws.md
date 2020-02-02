@@ -23,3 +23,6 @@ Relationship handling
     these are stored in a dict now
     for multi-client (like many services using a db endpoint on the db) it will need to be indexed differently
         while this is true in the model we still want to support a simple interface (jq friendly) on the consumer side. This either has to be a list structure which is harder to parse without denoting a key or a mapping which again has the key issue. 
+
+
+Need an idea around PortSets with names that can be overridden at the various config layers. 

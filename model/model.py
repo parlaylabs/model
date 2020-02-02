@@ -108,19 +108,28 @@ class Service(GraphObj):
         self._populate_endpoint_config()
 
     def _populate_endpoint_config(self):
+        component_data = utils.pick(self.entity.endpoints, name="http", default={}).get(
+            "data", {}
+        )
         env_config = self.graph.environment.get("config", {})
         service_config = env_config.get("services", {}).get(self.name, {})
+        config_data = service_config.get("config", [])
         composed = jsonmerge.merge(self.config, service_config)
+
         # XXX: resolve references to overlay vars from service_config.config
         # into the endpoint data as a means of setting runtime values
         # TODO: we should be able to reference vault and/or other secret mgmt tools
         # here do reference actual credentials
-        config_data = service_config.get("config", [])
-        for cd in config_data:
-            epname = cd.get("endpoint")
-            endpoint = self.endpoints[epname]
-            data = cd.get("data", {})
-            endpoint.data.update(data)
+        # lookup order in is [interface, endpoint, component, service via graph [TBD], environment]
+        # last write wins and is recorded in ep data
+        for ep in self.endpoints.values():
+            data = {}
+            data.update(component_data)
+            for cd in config_data:
+                epname = cd.get("endpoint")
+                if epname == ep.name:
+                    data.update(cd.get("data", {}))
+            ep.data.update(data)
 
     def validate(self):
         for rel in self.relations:
@@ -177,10 +186,12 @@ class Service(GraphObj):
     @property
     def ports(self):
         ports = []
+
         for ep in self.endpoints.values():
             if ep.provides:
                 for p in ep.ports:
-                    ports.append(dict(name=ep.name, port=str(p)))
+                    portspec = dict(name=ep.name, port=str(p))
+                    ports.append(portspec)
         ports.sort(key=lambda x: x["name"])
         return ports
 
@@ -410,8 +421,10 @@ class Endpoint:
     @property
     def ports(self):
         ports = set()
+        # XXX: this doesn't support per-port overrides, its very generic now
+        # see the flaws document about named portsets
         for c in utils.filter_iter(self.provides, name="port"):
-            p = c.get("default")
+            p = self.data.get("port", c.get("default"))
             if not p:
                 continue
             # There may be interpolation needed here
