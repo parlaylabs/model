@@ -212,8 +212,13 @@ def develop(config, update, **kwargs):
 @graph.command()
 @using(ModelConfig, common_args, graph_common)
 def shell(config, **kwargs):
+    import atexit
     import code
+    import readline
+    import sys
     from jedi.utils import setup_readline
+
+    histfile_name = ".python_history"
 
     config.init()
     # launch a development server for testing
@@ -226,7 +231,7 @@ def shell(config, **kwargs):
             )
         )
 
-    output = render.FileRenderer("-")
+    output = render_impl.FileRenderer("-")
 
     def renderer(x):
         runtime_impl.render_graph(x, output)
@@ -246,7 +251,35 @@ def shell(config, **kwargs):
             self.__dict__ = ns
 
     setup_readline(O(ns))
-    code.interact("model interactive shell", local=ns)
+
+    env = os.environ.get("VIRTUAL_ENV")
+
+    if env:
+        env_name = os.path.basename(env)
+        histfile_name = "{}_{}".format(histfile_name, env_name)
+
+        sys.ps1 = f"model ({graphs[0].name}) >>> "
+
+    # set history file
+    try:
+        histfile = os.path.join(os.environ["XDG_CACHE_HOME"], "python", histfile_name)
+    except KeyError:
+        histfile = os.path.join(os.environ["HOME"], ".cache", "python", histfile_name)
+
+    Path(os.path.dirname(histfile)).mkdir(parents=True, exist_ok=True)
+
+    try:
+        readline.read_history_file(histfile)
+        # default history len is -1 (infinite), which may grow unruly
+        readline.set_history_length(1000)
+    except FileNotFoundError:
+        pass
+
+    atexit.register(readline.write_history_file, histfile)
+    banner = f"""model interactive shell
+{sorted(ns.keys())}
+    """
+    code.interact(banner, local=ns)
 
 
 if __name__ == "__main__":
