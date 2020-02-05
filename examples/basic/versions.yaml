@@ -1,0 +1,7 @@
+kind: Versions
+name: versions
+versions:
+  - name: ghost
+    image: ghost:latest
+  - name: mysql
+    image: mysql:8.0.19

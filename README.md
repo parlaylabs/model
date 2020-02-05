@@ -57,6 +57,8 @@ model will be run. The Runtime object provides translations from the model to a 
 provided. Typically this includes some exposed IP address and an idea of how to
 communicate at that address. 
 
+**Versions** - A document which can map service names to component images providing a single view of all images used in a graph.
+
 Model
 =====
 

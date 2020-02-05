@@ -196,3 +196,23 @@ register(
         "required": ["name", "kind", "version", "role"],
     },
 )
+
+register(
+    "Versions",
+    schema={
+        "$schema": "http://json-schema.org/draft-08/schema#",
+        "properties": {
+            "name": strprop,
+            "kind": strprop,
+            "version": strprop,
+            "versions": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {"name": strprop, "image": strprop,},
+                },
+            },
+        },
+    },
+)
+

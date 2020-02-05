@@ -26,3 +26,7 @@ Relationship handling
 
 
 Need an idea around PortSets with names that can be overridden at the various config layers. 
+
+
+GitOps model -- create a binding between a graph, environment and runtime and a daemon running with the deployment. WHen a change occurs in the git upstream (branch and/or tag) we must resolve those change.
+

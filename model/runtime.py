@@ -368,6 +368,9 @@ class Istio:
                             "route": [
                                 {
                                     "destination": {
+                                        # FIXME: this has the issue that kustomize won't see it for
+                                        # name prefix changes which do impact this
+                                        # this is a general problem
                                         "host": f"{service.name}.{graph.name}.svc.cluster.local",
                                         # XXX: single port at random from set, come on...
                                         "port": {"number": int(ep.ports[0])},

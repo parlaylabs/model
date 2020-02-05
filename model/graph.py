@@ -96,7 +96,7 @@ def plan(graph_entity, store, environment, runtime=None):
 
         # Combine graph config with raw component data as a new facet on the entity
         # XXX: src could/should be a global graph reference
-        comp.add_facet(service_spec, "<graph>")
+        comp.add_facet(service_spec, graph_entity.src_ref[0])
         c_eps = comp.get("endpoints", [])
         exposed = service_spec.get("expose", [])
         for ep in exposed:
@@ -161,6 +161,26 @@ def plan(graph_entity, store, environment, runtime=None):
         for ep in endpoints:
             ep.service.relations.append(r)
         store.add(r)
+
+    versions = store.get("versions", {}).values()
+    for vspec in versions:
+        for version in vspec.versions:
+            sname = version["name"]
+            image = version["image"]
+            service = store.service.get(sname)
+            if not service:
+                raise exceptions.ConfigurationError(
+                    f"Versions file references service {sname} which isn't in graph"
+                )
+            service.add_facet({"image": image}, vspec.src_ref[0])
+    # Now ger or create an updated versions document
+    version = entity.Entity(dict(name="versions", kind="Versions"))
+    versions = []
+    for s in services.values():
+        image = s.get("image")
+        versions.append(dict(name=s.name, image=image))
+    version.versions = versions
+    store.versions[version.name] = version
 
     g = Graph(
         entity=graph_entity,

@@ -26,6 +26,9 @@ class GraphObj:
     def validate(self):
         return self.entity.validate()
 
+    def __getattr__(self, key):
+        return self.entity[key]
+
     def get(self, key, default=None):
         return self.entity.get(key, default)
 
@@ -171,17 +174,6 @@ class Service(GraphObj):
             address = config.get("address")
             return address
         return self.runtime.service_addr(self, self.graph)
-
-    @property
-    def exposed(self):
-        # XXX: we are combining at runtime rather than at creation
-        # change this pattern
-        return self.entity.get("expose", [])
-
-    @property
-    def exposed_endpoints(self):
-        for ex in self.exposed:
-            yield self.endpoints[ex]
 
     @property
     def ports(self):
