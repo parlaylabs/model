@@ -239,9 +239,13 @@ If versions of referenced components have changed you may update them by editing
 where omitting component will update all and omitting version will use the latest. 
 
 
-```model graph apply -o <dir>``` 
+```model graph render -o <dir>``` 
 
 will apply any changes to the graph to the runtime. 
+
+```model graph up -o <dir>```
+
+Will render the graph supplied with **-c** to the output dir and then apply it to the current kubernetes context.
 
 To enforce a rollout of a new version you might upgrade the components and then use the apply command with a **-k** option to add a strategy patch to the rollout manifest. This can apply standard policy around canary, a/b or rolling upgrades. With the support of an operator other strategies can be added in the future.
 

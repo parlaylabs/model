@@ -1,6 +1,7 @@
 import logging
 import os
 import subprocess
+import tempfile
 from pathlib import Path
 
 import click
@@ -8,7 +9,8 @@ import click
 from .. import entity
 from .. import exceptions
 from .. import graph as graph_manager
-from .. import model, render
+from .. import model
+from .. import render as render_impl
 from .. import runtime as runtime_impl
 from .. import schema, server, store
 from .. import utils
@@ -147,29 +149,41 @@ def plan(config, **kwargs):
 @graph.command()
 @using(ModelConfig, common_args, graph_common)
 @click.option("-o", "--output-dir", default="-")
-@click.option("--kustomize/--no-kustomize", default=False)
-def apply(config, output_dir, kustomize, **kwargs):
+def render(config, output_dir, **kwargs):
     config.init()
     graphs = config.store.graph.values()
     # Apply should be graph at a time
     # or at least a single runtime
 
-    if kustomize and output_dir == "-":
-        raise exceptions.ConfigurationError(
-            "You must output to a directory using -o <dir> to kustomize"
-        )
-
     if output_dir == "-":
-        ren = render.FileRenderer(output_dir)
+        ren = render_impl.FileRenderer(output_dir)
     else:
-        ren = render.DirectoryRenderer(output_dir)
+        ren = render_impl.DirectoryRenderer(output_dir)
 
     for graph in graphs:
         graph = graph_manager.plan(graph, config.store, environment=config.environment)
         graph_manager.apply(graph, config.store, config.runtime, ren)
 
-    if kustomize:
-        subprocess.run(f"kubectl kustomize {output_dir}", shell=True)
+
+@graph.command()
+@using(ModelConfig, common_args, graph_common)
+@click.option("-o", "--output-dir", default=None)
+def up(config, output_dir, **kwargs):
+    config.init()
+    graphs = config.store.graph.values()
+    # Apply should be graph at a time
+    # or at least a single runtime
+
+    if not output_dir:
+        output_dir = tempfile.mkdtemp("base")
+        log.info(f"Rendering model output to {output_dir}")
+
+    ren = render_impl.DirectoryRenderer(output_dir)
+
+    for graph in graphs:
+        graph = graph_manager.plan(graph, config.store, environment=config.environment)
+        graph_manager.apply(graph, config.store, config.runtime, ren)
+    subprocess.run(f"kubectl apply -k {output_dir}", shell=True)
 
 
 @graph.command()
@@ -212,14 +226,19 @@ def shell(config, **kwargs):
             )
         )
 
+    output = render.FileRenderer("-")
+
+    def renderer(x):
+        runtime_impl.render_graph(x, output)
+        output.write()
+
     ns = {
         "graphs": graphs,
         "g": graphs[0],
         "store": config.store,
         "config": config,
         "dump": lambda x: print(utils.dump(x)),
-        "view": graph_manager.view,
-        "render": graphs[0].render,
+        "render": renderer,
     }
 
     class O:
