@@ -249,8 +249,7 @@ class Service(GraphObj):
             ctx[f"{name}_remote"] = remote
         return ctx
 
-    @property
-    def context(self):
+    def _context(self):
         env_config = self.graph.environment.get("config", {})
         service_config = env_config.get("services", {}).get(self.name, {})
         composed = jsonmerge.merge(self.config, service_config)
@@ -265,27 +264,18 @@ class Service(GraphObj):
         # for now we do all
         ctx = self.build_context_from_endpoints()
         context.update(ctx)
-        return context
+        return context, composed
 
-    def full_config(self):
+    @property
+    def context(self):
+        return self._context()[0]
+
+    def full_config(self, allow_missing=False):
         # There might be config for the service in either/both the graph and the environment.
         # The env will take priority as the graph object can be reusable but the env contains
         # specific overrides.
-        env_config = self.graph.environment.get("config", {})
-        service_config = env_config.get("services", {}).get(self.name, {})
-        composed = jsonmerge.merge(self.config, service_config)
-        # XXX: resolve references to overlay vars from service_config.config
-        # into the endpoint data as a means of setting runtime values
-        # TODO: we should be able to reference vault and/or other secret mgmt tools
-        # here do reference actual credentials
-        context = dict(service=self, this=self, **env_config)
-        context.update(composed)
-
-        # XXX: This could filter down to only the connected relation but
-        # for now we do all
-        ctx = self.build_context_from_endpoints()
-        context.update(ctx)
-        return utils.interpolate(composed, context)
+        context, composed = self._context()
+        return utils.interpolate(composed, context, allow_missing=allow_missing)
 
     @property
     def annotations(self):

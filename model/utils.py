@@ -118,7 +118,7 @@ def fstring(string, data_context):
     return output[0]
 
 
-def _interpolate_str(v, data_context):
+def _interpolate_str(v, data_context, allow_missing=False):
     try:
         # Fast path -- however computed properties might make the 2nd form nearly as fast
         return v.format_map(data_context)
@@ -126,10 +126,12 @@ def _interpolate_str(v, data_context):
         try:
             return fstring(v, data_context)
         except AttributeError as e:
+            if allow_missing:
+                return v
             raise AttributeError(f"Error interpolating {v} with {data_context.keys()}")
 
 
-def interpolate(data, data_context=None):
+def interpolate(data, data_context=None, allow_missing=False):
     if isinstance(data, (dict, tuple, list, set)):
         result = type(data)()
     else:
@@ -138,7 +140,7 @@ def interpolate(data, data_context=None):
     data_context = AttrAccess(data_context)
     if isinstance(data, list):
         for item in data:
-            result.append(interpolate(item, data_context))
+            result.append(interpolate(item, data_context, allow_missing))
     elif isinstance(data, dict):
         for k, v in data.items():
             if isinstance(v, dict):
@@ -146,19 +148,19 @@ def interpolate(data, data_context=None):
             elif isinstance(v, (list, tuple, set)):
                 lst_result = []
                 for item in v:
-                    lst_result.append(interpolate(item, data_context))
+                    lst_result.append(interpolate(item, data_context, allow_missing))
                 result[k] = lst_result
             elif isinstance(v, str):
                 # Check the very special case that there is a single quoted var in the format string
                 #  in this case we wish to allow non-string returns
-                result[k] = _interpolate_str(v, data_context)
+                result[k] = _interpolate_str(v, data_context, allow_missing)
             else:
                 result[k] = v
     elif isinstance(data, str):
-        return _interpolate_str(data, data_context)
+        return _interpolate_str(data, data_context, allow_missing)
     else:
         if hasattr(data, "serialized"):
-            return interpolate(data.serialized(), data_context)
+            return interpolate(data.serialized(), data_context, allow_missing)
         else:
             return data
     return result

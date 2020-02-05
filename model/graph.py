@@ -197,25 +197,3 @@ def plan(graph_entity, store, environment, runtime=None):
 def apply(graph, store, runtime, ren):
     runtime_impl.render_graph(graph, ren)
     ren.write()
-
-
-def view(g):
-    from pathlib import Path
-    import graphviz
-    import webbrowser
-
-    gv = graphviz.Graph(format="svg")
-    with gv.subgraph(name=g.name, comment=g.name) as cluster:
-        for rel in g.relations:
-            cluster.edge(
-                *[ep.qual_name for ep in rel.endpoints],
-                label=rel.endpoints[0].interface.name,
-            )
-
-        # There might be unconnected services (which is broken but we want to show here)
-        # for service in g.services:
-        #    cluster.node(service.name)
-    # gv.view()
-    fn = gv.render()
-    fn = f"file://{Path.cwd()}/{fn}"
-    webbrowser.open_new_tab(fn)
