@@ -351,7 +351,7 @@ class Istio:
             ent.data["metadata"]["labels"]["istio-injection"] = "enabled"
 
     def render_service(self, service, graph, output):
-        # FIXME: we will need the ability to handle any type of endpoint the sevice exposes
+        # FIXME: we will need the ability to handle any type of endpoint the service exposes
         exposed = service.exposed
         if not exposed:
             return

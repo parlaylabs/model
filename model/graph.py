@@ -97,14 +97,8 @@ def plan(graph_entity, store, environment, runtime=None):
         # Combine graph config with raw component data as a new facet on the entity
         # XXX: src could/should be a global graph reference
         comp.add_facet(service_spec, graph_entity.src_ref[0])
-        c_eps = comp.get("endpoints", [])
-        exposed = service_spec.get("expose", [])
-        for ep in exposed:
-            if not utils.pick(c_eps, name=ep):
-                raise exceptions.ConfigurationError(
-                    f"Unable to expose unknown endpoint {ep}"
-                )
 
+        c_eps = comp.get("endpoints", [])
         srt = service_spec.get("runtime", graph_entity.get("runtime", runtime))
         if isinstance(srt, str):
             srt = runtime_impl.resolve(srt, store)

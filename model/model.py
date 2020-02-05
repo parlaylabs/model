@@ -4,6 +4,7 @@ from typing import Any, Dict, List
 import jsonmerge
 
 from . import entity
+from . import exceptions
 from . import schema
 from . import utils
 
@@ -119,6 +120,12 @@ class Service(GraphObj):
         config_data = service_config.get("config", [])
         composed = jsonmerge.merge(self.config, service_config)
 
+        for epname in self.exposed:
+            if epname not in self.endpoints:
+                raise exceptions.ConfigurationError(
+                    f"Unable to expose unknown endpoint {epname} in service {self.name}"
+                )
+
         # XXX: resolve references to overlay vars from service_config.config
         # into the endpoint data as a means of setting runtime values
         # TODO: we should be able to reference vault and/or other secret mgmt tools
@@ -162,6 +169,15 @@ class Service(GraphObj):
         ep = Endpoint(name=name, interface=interface, service=self, role=role)
         self.endpoints[name] = ep
         return ep
+
+    @property
+    def exposed(self):
+        return self.entity.get("expose", [])
+
+    @property
+    def exposed_endpoints(self):
+        for ex in self.exposed:
+            yield self.endpoints[ex]
 
     @property
     def service_addr(self):
