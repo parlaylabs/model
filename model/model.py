@@ -114,13 +114,9 @@ class Service(GraphObj):
         self._populate_endpoint_config()
 
     def _populate_endpoint_config(self):
-        # component_data = utils.pick(self.entity.endpoints, name="http", default={}).get(
-        #    "data", {}
-        # )
         env_config = self.graph.environment.get("config", {})
         service_config = env_config.get("services", {}).get(self.name, {})
-        config_data = service_config.get("config", [])
-        composed = jsonmerge.merge(self.config, config_data)
+        env_config_data = service_config.get("config", [])
         for epname in self.exposed:
             if epname not in self.endpoints:
                 raise exceptions.ConfigurationError(
@@ -133,16 +129,23 @@ class Service(GraphObj):
         # here do reference actual credentials
         # lookup order in is [interface, endpoint, component, service via graph [TBD], environment]
         # last write wins and is recorded in ep data
-        for cd in composed:
-            data = {}
-            data.update(cd.get("data", {}))
+        for ep in self.endpoints.values():
+            env = utils.pick(env_config_data, endpoint=ep.name, default={}).get(
+                "data", {}
+            )
+            component_data = utils.pick(
+                self.entity.endpoints, name=ep.name, default={}
+            ).get("data", {})
+            data = jsonmerge.merge(component_data, env)
+            ep.data.update(data)
+
+        env = None
+        for cd in env_config_data:
             epname = cd.get("endpoint")
-            if epname in self.endpoints:
-                ep = self.endpoints[epname]
-                ep.data.update(data)
-            elif epname is None:
-                # Mixin any config not bound to an endpoint
-                self.add_facet(data, "<config>")
+            if epname:
+                continue
+            data = cd.get("data", self.graph.environment.src_ref[0])
+            self.add_facet(data, "<config>")
 
     def validate(self):
         for rel in self.relations:
