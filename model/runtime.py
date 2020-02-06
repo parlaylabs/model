@@ -77,7 +77,7 @@ class Kubernetes:
         # XXX: Protocol support
         dports = []
         for p in ports:
-            dports.append(dict(containerPort=int(p["port"]), protocol="TCP"))
+            dports.append(dict(containerPort=int(p["port"]), protocol=p["protocol"]))
 
         # sconfig = graph.environment.config.get("services", {}).get(service.name, {})
         # senv = sconfig.get("environment", [])
@@ -373,7 +373,7 @@ class Istio:
                                         # this is a general problem
                                         "host": f"{service.name}.{graph.name}.svc.cluster.local",
                                         # XXX: single port at random from set, come on...
-                                        "port": {"number": int(ep.ports[0])},
+                                        "port": {"number": int(ep.ports[0].port)},
                                     }
                                 }
                             ],

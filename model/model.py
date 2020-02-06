@@ -8,6 +8,8 @@ from . import exceptions
 from . import schema
 from . import utils
 
+_marker = object()
+
 
 @dataclass
 class GraphObj:
@@ -112,14 +114,13 @@ class Service(GraphObj):
         self._populate_endpoint_config()
 
     def _populate_endpoint_config(self):
-        component_data = utils.pick(self.entity.endpoints, name="http", default={}).get(
-            "data", {}
-        )
+        # component_data = utils.pick(self.entity.endpoints, name="http", default={}).get(
+        #    "data", {}
+        # )
         env_config = self.graph.environment.get("config", {})
         service_config = env_config.get("services", {}).get(self.name, {})
         config_data = service_config.get("config", [])
-        composed = jsonmerge.merge(self.config, service_config)
-
+        composed = jsonmerge.merge(self.config, config_data)
         for epname in self.exposed:
             if epname not in self.endpoints:
                 raise exceptions.ConfigurationError(
@@ -132,14 +133,16 @@ class Service(GraphObj):
         # here do reference actual credentials
         # lookup order in is [interface, endpoint, component, service via graph [TBD], environment]
         # last write wins and is recorded in ep data
-        for ep in self.endpoints.values():
+        for cd in composed:
             data = {}
-            data.update(component_data)
-            for cd in config_data:
-                epname = cd.get("endpoint")
-                if epname == ep.name:
-                    data.update(cd.get("data", {}))
-            ep.data.update(data)
+            data.update(cd.get("data", {}))
+            epname = cd.get("endpoint")
+            if epname in self.endpoints:
+                ep = self.endpoints[epname]
+                ep.data.update(data)
+            elif epname is None:
+                # Mixin any config not bound to an endpoint
+                self.add_facet(data, "<config>")
 
     def validate(self):
         for rel in self.relations:
@@ -194,12 +197,10 @@ class Service(GraphObj):
     @property
     def ports(self):
         ports = []
-
         for ep in self.endpoints.values():
             if ep.provides:
                 for p in ep.ports:
-                    portspec = dict(name=ep.name, port=str(p))
-                    ports.append(portspec)
+                    ports.append(p)
         ports.sort(key=lambda x: x["name"])
         return ports
 
@@ -247,7 +248,7 @@ class Service(GraphObj):
                 return rel
         return None
 
-    def build_context_from_endpoints(self):
+    def _build_context_from_endpoints(self):
         """Build context to populate an interpolation context by adding name_relation, 
         name_local and name_remote with the relations, and the endpoints.
         """
@@ -278,8 +279,10 @@ class Service(GraphObj):
 
         # XXX: This could filter down to only the connected relation but
         # for now we do all
-        ctx = self.build_context_from_endpoints()
+        ctx = self._build_context_from_endpoints()
         context.update(ctx)
+        if "environment" not in context:
+            context["environment"] = self.graph.environment
         return context, composed
 
     @property
@@ -418,7 +421,7 @@ class Endpoint:
 
     @property
     def ports(self):
-        ports = set()
+        ports = []
         # XXX: this doesn't support per-port overrides, its very generic now
         # see the flaws document about named portsets
         for c in utils.filter_iter(self.provides, name="port"):
@@ -437,9 +440,11 @@ class Endpoint:
                     config=self.config,
                 ),
             )
-            ports.add(p)
+            p = utils.AttrAccess(
+                port=p, name=self.name, protocol=c.get("protocol", "TCP")
+            )
+            ports.append(p)
 
-        ports = list(ports)
         ports.sort()
         return ports
 

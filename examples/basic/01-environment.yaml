@@ -12,7 +12,7 @@ config:
         - name: database__connection__host
           value: "{db_remote.service.service_addr}"
         - name: database__connection__port
-          value: "{db_remote.ports[0]}"
+          value: "{db_remote.ports[0].port}"
         - name: database__connection__user
           value: "{db_remote.provided.admin_user}"
         - name: database__connection__password

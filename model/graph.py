@@ -90,9 +90,6 @@ def plan(graph_entity, store, environment, runtime=None):
             raise exceptions.ConfigurationError(
                 f"graph references unknown component {service_spec}"
             )
-        # Commonly config comes from the env object, not the graph but we support
-        # certain reuable configs none the less
-        config = service_spec.get("config", {})
 
         # Combine graph config with raw component data as a new facet on the entity
         # XXX: src could/should be a global graph reference
@@ -103,6 +100,11 @@ def plan(graph_entity, store, environment, runtime=None):
         if isinstance(srt, str):
             srt = runtime_impl.resolve(srt, store)
 
+        # Commonly config comes from the env object, not the graph but we support
+        # certain reusable configs none the less
+        config = service_spec.get("config", {})
+        # env_config = environment.config.get("services", {})
+        # env_srv = env_config.get(name, {})
         # XXX: we could/should merge env into config here
         s = model.Service(entity=comp, name=name, runtime=srt, config=config)
         for ep in c_eps:
