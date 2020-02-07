@@ -164,7 +164,7 @@ class Kubernetes:
                 {
                     "secret": {
                         "secretName": secrets_name,
-                        "defaultMode": 0o511,
+                        "mode": 0o511,
                         "items": [
                             {
                                 "key": f"{graph.name}-{service.name}-secrets.json",
