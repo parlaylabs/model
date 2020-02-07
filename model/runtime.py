@@ -100,26 +100,26 @@ class Kubernetes:
         if data is None:
             data = self.config_map_for(service)
         if name is None:
-            name = f"configs/{graph.name}-{service.name}-config.json"
+            filename = f"configs/{graph.name}-{service.name}-config.json"
         output.add(
-            name, data, self, format="json", service=service, graph=graph,
+            filename, data, self, format="json", service=service, graph=graph,
         )
-        return name
+        return f"{service.name}-config"
 
     def add_secrets(self, graph, service, output, data=None, name=None):
         if data is None:
             data = self.secrets_for(service)
         if name is None:
-            name = f"configs/{graph.name}-{service.name}-secrets.json"
+            filename = f"configs/{graph.name}-{service.name}-secrets.json"
 
         output.add(
-            name, data, self, format="json", service=service, graph=graph,
+            filename, data, self, format="json", service=service, graph=graph,
         )
-        return name, bool(data)
+        return f"{service.name}-secrets", bool(data)
 
     def add_volumes(self, graph, service, output, configmap_name, secrets_name=None):
         volumeMounts = [
-            {"name": "model-config", "mountPath": "/etc/model/", "readOnly": True,}
+            {"name": "model", "mountPath": "/etc/model/", "readOnly": True,}
         ]
 
         volumes = [
@@ -163,10 +163,10 @@ class Kubernetes:
             volumes[0]["projected"]["sources"].append(
                 {
                     "secret": {
-                        "secretName": secrets_name,
-                        "mode": 0o511,
+                        "name": secrets_name,
                         "items": [
                             {
+                                "mode": 0o511,
                                 "key": f"{graph.name}-{service.name}-secrets.json",
                                 "path": f"{service.name}-secrets.json",
                             }
@@ -203,7 +203,6 @@ class Kubernetes:
             key = f"{graph.name}-{service.name}-{fn}"
             volumes[0]["projected"]["sources"].append(
                 dict(
-                    name=name,
                     configMap=dict(
                         name=f"{service.name}-{fn}",
                         items=[dict(key=key, path=template)],
@@ -500,7 +499,8 @@ class Kustomize:
         # one and update the deployments reference to it.
         # The Kubernetes plugin should have registered a config map to
         # the output.
-
+        # XXX: we should scan for these or ask the K8s plugin directly for the names
+        # right now they have to be in sync
         context = dict(
             name=f"{service.name}-config",
             namespace=graph.name,
