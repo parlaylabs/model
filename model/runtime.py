@@ -106,57 +106,49 @@ class Kubernetes:
 
     def add_volumes(self, graph, service, output, configmap_name, secrets_name=None):
         volumeMounts = [
-            {
-                "name": "model-config",
-                "mountPath": "/etc/model/config",
-                "readOnly": True,
-            },
-            {"name": "podinfo", "mountPath": "/etc/podinfo", "readOnly": True,},
+            {"name": "model-config", "mountPath": "/etc/model/", "readOnly": True,}
         ]
-
-        if secrets_name:
-            volumeMounts.append(
-                {
-                    "name": "model-secrets",
-                    "mountPath": "/etc/model/secrets",
-                    "readOnly": True,
-                }
-            )
 
         volumes = [
             {
-                "name": "model-config",
-                "configMap": {
-                    "name": configmap_name,
-                    "items": [
+                "name": "model",
+                "projected": {
+                    "sources": [
                         {
-                            "key": f"{graph.name}-{service.name}-config.json",
-                            "path": f"{service.name}-config.json",
-                        }
-                    ],
-                },
-            },
-            {
-                "name": "podinfo",
-                "downwardAPI": {
-                    "items": [
-                        {
-                            "path": "labels",
-                            "fieldRef": {"fieldPath": "metadata.labels",},
+                            "configMap": {
+                                "name": configmap_name,
+                                "items": [
+                                    {
+                                        "key": f"{graph.name}-{service.name}-config.json",
+                                        "path": f"{service.name}-config.json",
+                                    }
+                                ],
+                            }
                         },
                         {
-                            "path": "annotations",
-                            "fieldRef": {"fieldPath": "metadata.annotations",},
+                            "downwardAPI": {
+                                "items": [
+                                    {
+                                        "path": "labels",
+                                        "fieldRef": {"fieldPath": "metadata.labels",},
+                                    },
+                                    {
+                                        "path": "annotations",
+                                        "fieldRef": {
+                                            "fieldPath": "metadata.annotations",
+                                        },
+                                    },
+                                ],
+                            },
                         },
-                    ],
+                    ]
                 },
-            },
+            }
         ]
 
         if secrets_name:
-            volumes.append(
+            volumes[0]["projected"]["sources"].append(
                 {
-                    "name": "model-secrets",
                     "secret": {
                         "secretName": secrets_name,
                         "defaultMode": 0o511,
@@ -195,9 +187,8 @@ class Kubernetes:
                 graph=graph,
             )
             cp = str(Path(container_path).parent / Path(container_path).stem)
-            volumeMounts.append(dict(name=name, mountPath=cp, readOnly=True))
             key = f"{graph.name}-{service.name}-{fn}"
-            volumes.append(
+            volumes[0]["projected"]["sources"].append(
                 dict(
                     name=name,
                     configMap=dict(
