@@ -71,26 +71,7 @@ class Kubernetes:
         secrets = dict(relations=service.full_relations(secrets=True))
         return secrets
 
-    def render_service(self, service, graph, output):
-        # push out a deployment
-        ports = service.ports
-        # XXX: Protocol support
-        dports = []
-        for p in ports:
-            dports.append(dict(containerPort=int(p["port"]), protocol=p["protocol"]))
-
-        # sconfig = graph.environment.config.get("services", {}).get(service.name, {})
-        # senv = sconfig.get("environment", [])
-        senv = service.full_config().get("environment", [])
-        labels = {
-            "app.kubernetes.io/name": service.name,
-            "app.kubernetes.io/version": str(service.entity.version),
-            "app.kubernetes.io/component": service.entity.name,
-            # XXX: become a graph ref
-            "app.kubernetes.io/part-of": graph.name,
-            "app.kubernetes.io/managed-by": __package__,
-        }
-
+    def add_namespace(self, graph, name, output):
         ns = dict(
             apiVersion="v1",
             kind="Namespace",
@@ -100,64 +81,57 @@ class Kubernetes:
         if nsfn not in output:
             output.add(nsfn, ns, self, graph=graph)
 
+    def add_configmap(self, graph, service, output, data=None, name=None):
         # creating the context for the config map involves all the service config and any information
         # provided by connected endpoints
-        config_map = self.config_map_for(service)
+        if data is None:
+            data = self.config_map_for(service)
+        if name is None:
+            name = f"configs/{graph.name}-{service.name}-config.json"
         output.add(
-            f"configs/{graph.name}-{service.name}-config.json",
-            config_map,
-            self,
-            format="json",
-            service=service,
-            graph=graph,
+            name, data, self, format="json", service=service, graph=graph,
         )
+        return name
 
-        secrets = self.secrets_for(service)
+    def add_secrets(self, graph, service, output, data=None, name=None):
+        if data is None:
+            data = self.secrets_for(service)
+        if name is None:
+            name = f"configs/{graph.name}-{service.name}-secrets.json"
+
         output.add(
-            f"configs/{graph.name}-{service.name}-secrets.json",
-            secrets,
-            self,
-            format="json",
-            service=service,
-            graph=graph,
+            name, data, self, format="json", service=service, graph=graph,
         )
+        return name, bool(data)
 
+    def add_volumes(self, graph, service, output, configmap_name, secrets_name=None):
         volumeMounts = [
             {
                 "name": "model-config",
                 "mountPath": "/etc/model/config",
                 "readOnly": True,
             },
-            {
-                "name": "model-secrets",
-                "mountPath": "/etc/model/secrets",
-                "readOnly": True,
-            },
             {"name": "podinfo", "mountPath": "/etc/podinfo", "readOnly": True,},
         ]
+
+        if secrets_name:
+            volumeMounts.append(
+                {
+                    "name": "model-secrets",
+                    "mountPath": "/etc/model/secrets",
+                    "readOnly": True,
+                }
+            )
 
         volumes = [
             {
                 "name": "model-config",
                 "configMap": {
-                    "name": f"{service.name}-config",
+                    "name": configmap_name,
                     "items": [
                         {
                             "key": f"{graph.name}-{service.name}-config.json",
                             "path": f"{service.name}-config.json",
-                        }
-                    ],
-                },
-            },
-            {
-                "name": "model-secrets",
-                "secret": {
-                    "secretName": f"{service.name}-secrets",
-                    "defaultMode": 0o511,
-                    "items": [
-                        {
-                            "key": f"{graph.name}-{service.name}-secrets.json",
-                            "path": f"{service.name}-secrets.json",
                         }
                     ],
                 },
@@ -178,6 +152,23 @@ class Kubernetes:
                 },
             },
         ]
+
+        if secrets_name:
+            volumes.append(
+                {
+                    "name": "model-secrets",
+                    "secret": {
+                        "secretName": secrets_name,
+                        "defaultMode": 0o511,
+                        "items": [
+                            {
+                                "key": f"{graph.name}-{service.name}-secrets.json",
+                                "path": f"{service.name}-secrets.json",
+                            }
+                        ],
+                    },
+                }
+            )
 
         # Handle any files which should be templatized and mapped into the container
         for filespec in service.files:
@@ -215,37 +206,11 @@ class Kubernetes:
                     ),
                 )
             )
+        return volumeMounts, volumes
 
-        pod_labels = {
-            "app": service.name,
-            "version": str(service.entity.version),
-        }
-        pod_labels.update(labels)
-
-        default_container = {
-            "name": service.name,
-            "image": service.entity.image,
-            "imagePullPolicy": "IfNotPresent",
-            "volumeMounts": volumeMounts,
-        }
-        if dports:
-            default_container["ports"] = dports
-        if senv:
-            default_container["env"] = senv
-
-        container_spec = {
-            "replicas": service.entity.get("replicas"),
-            "selector": {"matchLabels": {"app.kubernetes.io/name": service.name}},
-            "template": {
-                "metadata": {"labels": pod_labels},
-                "spec": {
-                    "restartPolicy": "Always",
-                    "containers": [default_container,],
-                    "volumes": volumes,
-                },
-            },
-        }
+    def add_image_pull_secret(self, graph, service, output, container_spec):
         # see if we need ImagePullSecrets based on defaultContainer
+        default_container = container_spec["template"]["spec"]["containers"][0]
         docker = self.runtime_impl.plugin("Docker")
         if docker:
             pull_secret = docker.image_secrets_for(default_container["image"])
@@ -273,6 +238,65 @@ class Kubernetes:
                     pull_secret.key, sec, self, service=service, graph=graph,
                 )
 
+    def render_service(self, service, graph, output):
+        labels = {
+            "app.kubernetes.io/name": service.name,
+            "app.kubernetes.io/version": str(service.entity.version),
+            "app.kubernetes.io/component": service.entity.name,
+            # XXX: become a graph ref
+            "app.kubernetes.io/part-of": graph.name,
+            "app.kubernetes.io/managed-by": __package__,
+        }
+
+        self.add_namespace(graph, graph.name, output)
+        cm_name = self.add_configmap(graph, service, output)
+        sec_name, use_secrets = self.add_secrets(graph, service, output)
+
+        volumeMounts, volumes = self.add_volumes(
+            graph, service, output, cm_name, use_secrets and sec_name or None
+        )
+
+        pod_labels = {
+            "app": service.name,
+            "version": str(service.entity.version),
+        }
+        pod_labels.update(labels)
+
+        default_container = {
+            "name": service.name,
+            "image": service.entity.image,
+            "imagePullPolicy": "IfNotPresent",
+            "volumeMounts": volumeMounts,
+        }
+
+        # push out a deployment
+        ports = service.ports
+        # XXX: Protocol support
+        dports = []
+        for p in ports:
+            dports.append(dict(containerPort=int(p["port"]), protocol=p["protocol"]))
+
+        senv = service.full_config().get("environment", [])
+        if dports:
+            default_container["ports"] = dports
+        if senv:
+            default_container["env"] = senv
+
+        container_spec = {
+            "replicas": service.entity.get("replicas"),
+            "selector": {"matchLabels": {"app.kubernetes.io/name": service.name}},
+            "template": {
+                "metadata": {"labels": pod_labels},
+                "spec": {
+                    "restartPolicy": "Always",
+                    "containers": [default_container,],
+                    "volumes": volumes,
+                },
+            },
+        }
+
+        self.add_image_pull_secret(graph, service, output, container_spec)
+
         deployment = {
             "apiVersion": "apps/v1",
             "kind": "Deployment",
@@ -295,12 +319,9 @@ class Kubernetes:
         # next push out a service object
         ports = []
         for p in service.ports:
-            # XXX: static protocol, pull from endpoint
-            # XXX: use named targetPort from pod definition
-            # ports need a unique name when there is more than one
-            # for this reason we must include the endpoint name
-            # TODO: support UDP and others as needed
-            ports.append({"protocol": "TCP", "name": p["name"], "port": int(p["port"])})
+            ports.append(
+                {"protocol": p["protocol"], "name": p["name"], "port": int(p["port"])}
+            )
         serviceSpec = {
             "apiVersion": "v1",
             "kind": "Service",

@@ -13,7 +13,7 @@ def store():
 def test_facets(store):
     base = "tests/assets/entity-01"
     schema.load_config(store, base)
-    e = store.environment.dev
+    e = store.environment.dev.entity
     assert e.serialized() == {
         "config": {
             "public_dns": "mystery.info",
