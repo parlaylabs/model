@@ -348,6 +348,62 @@ class Kubernetes:
                 f"50-{service.name}-service.yaml", serviceSpec, self, service=service
             )
 
+    def render_relation_ep(self, relation, endpoint, graph, outputs):
+        # If the endpoint has no runtime we want to render a service/endpoint pair
+        # in the k8s runtime to make this resolve.
+        # If the endpoint is in this runtime it will be handled in render_service
+        other = relation.get_remote(endpoint.service)
+        if (
+            endpoint.service.runtime is self.runtime_impl
+            and other.service.runtime is not None
+        ):
+            return
+        # The current approach needs DNS resolution (sometimes) in the context
+        # of the runtime (for example in AWS regions)
+        # XXX: we could fix some of this with init containers
+        # XXX: maybe with the default svc account creating the endpoints post DNS?
+        ports = []  # {targetPort:, port: }
+        for port in other.ports:
+            ports.append(dict(targetPort=int(port.port), port=int(port.port)))
+
+        subsets = []  # {addresses: [{ip:}], ports: [{port:}]}
+        # FIXME: addresses should be a list, not single value, still problematic
+        address = other.provided.address
+        port = other.provided.port
+        subsets.append(dict(addresses=[address], ports=[port]))
+
+        service = dict(
+            kind="Service",
+            apiVersion="v1",
+            metadata=dict(name=other.service.name),
+            spec=dict(ports=ports),
+        )
+        if not utils.is_ip(address):
+            service["spec"].update(dict(type="ExternalName", externalName=address))
+        else:
+            endpoints = dict(
+                kind="Endpoints",
+                apiVersion="v1",
+                metadata=dict(name=other.service.name),
+                subsets=subsets,
+            )
+            outputs.add(
+                f"72-{other.service.name}-endpoints.yaml",
+                endpoints,
+                self,
+                relation=relation,
+                endpoint=other,
+                graph=graph,
+            )
+        outputs.add(
+            f"70-{other.service.name}-service.yaml",
+            service,
+            self,
+            relation=relation,
+            endpoint=other,
+            graph=graph,
+        )
+
 
 @register
 @dataclass
@@ -565,9 +621,6 @@ def render_graph(graph, outputs):
                 m = getattr(plugin, mn, None)
                 if m:
                     m(obj, graph, outputs)
-        # XXX: This is more complex as we'd like each relation endpoint to be able to
-        # belong to a different runtime
-        # FIXME: for now this is the current behavior (which could be odd without per-endpoint runtime rendering)
         for obj in graph.relations:
             for endpoint in obj.endpoints:
                 runtime = endpoint.service.runtime
@@ -578,7 +631,7 @@ def render_graph(graph, outputs):
                     mn = f"{phase}render_relation_ep"
                     m = getattr(plugin, mn, None)
                     if m:
-                        m(obj, graph, outputs, endpoint)
+                        m(obj, endpoint, graph, outputs)
 
     for runtime in runtimes:
         for plugin in runtime.plugins:

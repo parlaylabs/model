@@ -1,6 +1,7 @@
 import ast
 import copy
 import functools
+import ipaddress
 import itertools
 import json
 import re
@@ -325,3 +326,10 @@ def filename_to_label(filename):
     f = f.replace("_", "-")
     return f
 
+
+def is_ip(string):
+    try:
+        ipaddress.ip_address(string)
+    except ValueError:
+        return False
+    return True
