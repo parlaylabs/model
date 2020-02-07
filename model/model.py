@@ -144,8 +144,8 @@ class Service(GraphObj):
             epname = cd.get("endpoint")
             if epname:
                 continue
-            data = cd.get("data", self.graph.environment.src_ref[0])
-            self.add_facet(data, "<config>")
+            data = cd.get("data", {})
+            self.add_facet(data, self.graph.environment.src_ref[0])
 
     def validate(self):
         for rel in self.relations:
