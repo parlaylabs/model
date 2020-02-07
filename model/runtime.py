@@ -71,7 +71,7 @@ class Kubernetes:
         secrets = dict(relations=service.full_relations(secrets=True))
         return secrets
 
-    def add_namespace(self, graph, name, output):
+    def add_namespace(self, graph, output):
         ns = dict(
             apiVersion="v1",
             kind="Namespace",
@@ -80,6 +80,19 @@ class Kubernetes:
         nsfn = f"00-{graph.name}-namespace.yaml"
         if nsfn not in output:
             output.add(nsfn, ns, self, graph=graph)
+
+    def add_service_account(self, graph, output, name=None):
+        if name is None:
+            name = f"{graph.name}-admin"
+        data = {
+            "apiVersion": "v1",
+            "kind": "ServiceAccount",
+            "metadata": {"name": name, "namespace": graph.name,},
+        }
+        output.add(
+            f"01-service-account.yaml", data, self, graph=graph,
+        )
+        return name
 
     def add_configmap(self, graph, service, output, data=None, name=None):
         # creating the context for the config map involves all the service config and any information
@@ -239,7 +252,9 @@ class Kubernetes:
             "app.kubernetes.io/managed-by": __package__,
         }
 
-        self.add_namespace(graph, graph.name, output)
+        self.add_namespace(graph, output)
+        service_account = self.add_service_account(graph, output)
+
         cm_name = self.add_configmap(graph, service, output)
         sec_name, use_secrets = self.add_secrets(graph, service, output)
 
@@ -279,6 +294,7 @@ class Kubernetes:
             "template": {
                 "metadata": {"labels": pod_labels},
                 "spec": {
+                    "serviceAccountName": service_account,
                     "restartPolicy": "Always",
                     "containers": [default_container,],
                     "volumes": volumes,
