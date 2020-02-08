@@ -59,3 +59,13 @@ def test_parse_tags():
         dict(domain="registry", org=None, image="image-name", version=None),
     )
 
+    expect(
+        "docker.fatline.io/analytics:v2.87.0-50-gfb5f8fa-SNAPSHOT",
+        dict(
+            domain="docker.fatline.io",
+            org=None,
+            image="analytics",
+            version="v2.87.0-50-gfb5f8fa-SNAPSHOT",
+        ),
+    )
+

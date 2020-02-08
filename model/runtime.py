@@ -199,13 +199,12 @@ class Kubernetes:
                 service=service,
                 graph=graph,
             )
-            cp = str(Path(container_path).parent / Path(container_path).stem)
+            cp = str(Path(container_path).parent / Path(container_path))
             key = f"{graph.name}-{service.name}-{fn}"
             volumes[0]["projected"]["sources"].append(
                 dict(
                     configMap=dict(
-                        name=f"{service.name}-{fn}",
-                        items=[dict(key=key, path=template)],
+                        name=f"{service.name}-{fn}", items=[dict(key=key, path=cp)],
                     ),
                 )
             )
@@ -374,7 +373,7 @@ class Kubernetes:
         service = dict(
             kind="Service",
             apiVersion="v1",
-            metadata=dict(name=other.service.name),
+            metadata=dict(name=other.service.name, namespace=graph.name),
             spec=dict(ports=ports),
         )
         if not utils.is_ip(address):
@@ -383,7 +382,7 @@ class Kubernetes:
             endpoints = dict(
                 kind="Endpoints",
                 apiVersion="v1",
-                metadata=dict(name=other.service.name),
+                metadata=dict(name=other.service.name, namespace=graph.name),
                 subsets=subsets,
             )
             outputs.add(

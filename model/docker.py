@@ -22,7 +22,7 @@ def auth_for(cfg, domain):
 
 # parse docker tag should return the match object
 tag_re = re.compile(
-    r"^((?P<domain>[^/]+)/)?((?P<org>[^/]+)/)?(?P<image>[^:]+)(:(?P<version>[\w\d]+))?$"
+    r"^((?P<domain>[^/]+)/)?((?P<org>[^/]+)/)?(?P<image>[^:]+)(:(?P<version>[-_\.\w\d]+))?$"
 )
 
 
