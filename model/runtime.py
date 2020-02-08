@@ -268,10 +268,16 @@ class Kubernetes:
 
         default_container = {
             "name": service.name,
-            "image": service.entity.image,
+            "image": service.image,
             "imagePullPolicy": "IfNotPresent",
             "volumeMounts": volumeMounts,
         }
+        command = service.get("command")
+        args = service.get("args")
+        if command:
+            default_container["command"] = command
+        if args:
+            default_container["args"] = args
 
         # push out a deployment
         ports = service.ports
