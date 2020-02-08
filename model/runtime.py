@@ -369,7 +369,7 @@ class Kubernetes:
         # FIXME: addresses should be a list, not single value, still problematic
         address = other.provided.address
         port = other.provided.port
-        subsets.append(dict(addresses=[address], ports=[port]))
+        subsets.append(dict(addresses=[{"ip": address}], ports=[{"port": int(port)}]))
 
         service = dict(
             kind="Service",
