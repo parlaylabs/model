@@ -30,3 +30,5 @@ Need an idea around PortSets with names that can be overridden at the various co
 
 GitOps model -- create a binding between a graph, environment and runtime and a daemon running with the deployment. WHen a change occurs in the git upstream (branch and/or tag) we must resolve those change.
 
+
+Components need a way to define what permissions they might need relative to a runtime. Such that we say "this component on AWS needs the following ec:<whatever> s3:*" permissions to run. This can help us configure calico or kiam to ensure the right pods get the right access and accelerate reviews.
