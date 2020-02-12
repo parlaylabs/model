@@ -192,9 +192,19 @@ class Service(GraphObj):
             # When there is no runtime we depend on the address being encoded
             # at the environment level. This contract will have to be validated
             # in the future, but for now
-            config = self.full_config()
-            address = config.get("address")
-            return address
+            # FIXME: the new address scheme places the address under a named endpoint
+            # we don't currently know which address this is. The common usecase is there
+            # might only be one static address for an unmanaged endpoint like this
+            # however this guesswork isn't quite right
+            # XXX: for now we scan
+            for endpoint in self.endpoints.values():
+                address = endpoint.data.get("address")
+                if address:
+                    return address
+            log.warning(
+                f"Endpoints for service {self.name} have no bound address. This is usually a configuration error."
+            )
+            return None
         return self.runtime.service_addr(self, self.graph)
 
     @property
@@ -284,8 +294,12 @@ class Service(GraphObj):
         # for now we do all
         ctx = self._build_context_from_endpoints()
         context.update(ctx)
-        if "environment" not in context:
-            context["environment"] = self.graph.environment
+
+        if "environment" in context:
+            # This would represent ENV defaults provided at some layer
+            # rename to env
+            context["env"] = context["environment"]
+        context["environment"] = self.graph.environment
         return context, composed
 
     @property
@@ -309,6 +323,7 @@ class Service(GraphObj):
 
     def render_template(self, name):
         template = self.get_template(name)
+        # FIXME: validate relations are here
         return template.render(self.context)
 
 
