@@ -175,7 +175,7 @@ def up(config, output_dir, **kwargs):
     # or at least a single runtime
 
     if not output_dir:
-        output_dir = tempfile.mkdtemp("base")
+        output_dir = tempfile.mkdtemp("-base", prefix="model-")
         log.info(f"Rendering model output to {output_dir}")
 
     ren = render_impl.DirectoryRenderer(output_dir)
