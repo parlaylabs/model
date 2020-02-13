@@ -22,6 +22,7 @@ jinja2 = "*"
 requests = "*"
 requests-file = "*"
 boto3 = "*"
+coloredlogs = "*"
 
 [requires]
 python_version = "3.7"

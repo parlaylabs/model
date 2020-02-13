@@ -5,6 +5,7 @@ import tempfile
 from pathlib import Path
 
 import click
+import coloredlogs
 
 from .. import entity
 from .. import exceptions
@@ -64,8 +65,38 @@ class ModelConfig:
         return default
 
     def setup_logging(self):
-        logging.basicConfig(level=self.find("log_level").upper())
+        level = self.find("log_level").upper()
+        logging.basicConfig(level=level)
+
+        field_styles = dict(
+            asctime=dict(color=241),
+            hostname=dict(color=241),
+            levelname=dict(color=136, bold=True),
+            programname=dict(color=234),
+            name=dict(color=61),
+            message=dict(),
+        )
+
+        level_styles = dict(
+            spam=dict(color=240, faint=True),
+            debug=dict(color=241),
+            verbose=dict(color=254),
+            info=dict(color=244),
+            notice=dict(color=166),
+            warning=dict(color=125),
+            success=dict(color=64, bold=True),
+            error=dict(color=160),
+            critical=dict(color=160, bold=True),
+        )
+        coloredlogs.install(
+            level=level,
+            field_styles=field_styles,
+            level_styles=level_styles,
+            fmt="[%(name)s:%(levelname)s] [%(filename)s:%(lineno)s (%(funcName)s)] %(message)s",
+        )
         logging.getLogger("jsonmerge").setLevel(logging.WARNING)
+        logging.getLogger("botocore").setLevel(logging.WARNING)
+        logging.getLogger("urllib3").setLevel(logging.WARNING)
 
     def load_configs(self):
         cd = self.find("config_dir")
