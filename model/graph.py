@@ -96,7 +96,10 @@ def plan(graph_entity, store, environment, runtime=None):
         comp.add_facet(service_spec, graph_entity.src_ref[0])
 
         c_eps = comp.get("endpoints", [])
-        srt = service_spec.get("runtime", graph_entity.get("runtime", runtime))
+        envconfig = environment.get("config", {}).get("services", {}).get(name, {})
+        srt = service_spec.get(
+            "runtime", envconfig.get("runtime", graph_entity.get("runtime", runtime))
+        )
         if isinstance(srt, str):
             srt = runtime_impl.resolve(srt, store)
 

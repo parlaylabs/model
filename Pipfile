@@ -21,6 +21,7 @@ jedi = "*"
 jinja2 = "*"
 requests = "*"
 requests-file = "*"
+boto3 = "*"
 
 [requires]
 python_version = "3.7"

@@ -244,6 +244,8 @@ def shell(config, **kwargs):
         "config": config,
         "dump": lambda x: print(utils.dump(x)),
         "render": renderer,
+        "output": output,
+        "utils": utils,
     }
 
     class O:

@@ -26,6 +26,10 @@ class GraphObj:
     def add_facet(self, data, src_ref=None):
         self.entity.add_facet(data, src_ref)
 
+    @property
+    def src_ref(self):
+        return self.entity.src_ref
+
     def validate(self):
         return self.entity.validate()
 
@@ -117,11 +121,6 @@ class Service(GraphObj):
         env_config = self.graph.environment.get("config", {})
         service_config = env_config.get("services", {}).get(self.name, {})
         env_config_data = service_config.get("config", [])
-        for epname in self.exposed:
-            if epname not in self.endpoints:
-                raise exceptions.ConfigurationError(
-                    f"Unable to expose unknown endpoint {epname} in service {self.name}"
-                )
 
         # XXX: resolve references to overlay vars from service_config.config
         # into the endpoint data as a means of setting runtime values
@@ -146,10 +145,17 @@ class Service(GraphObj):
                 continue
             data = cd.get("data", {})
             self.add_facet(data, self.graph.environment.src_ref[0])
+        self._interpolate_entity()
 
     def validate(self):
         for rel in self.relations:
             rel.validate()
+
+        for epname in self.exposed:
+            if epname not in self.endpoints:
+                raise exceptions.ConfigurationError(
+                    f"Unable to expose unknown endpoint {epname} in service {self.name}"
+                )
 
         comp = self.entity
         # this is the environment validation relative to the component
@@ -323,7 +329,6 @@ class Service(GraphObj):
 
     def render_template(self, name):
         template = self.get_template(name)
-        # FIXME: validate relations are here
         return template.render(self.context)
 
 

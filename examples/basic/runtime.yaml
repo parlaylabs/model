@@ -5,3 +5,8 @@ plugins:
     - name: Kubernetes
     - name: Istio
     - name: Kustomize
+---
+kind: Runtime
+name: ec2
+plugins: 
+    - name: EC2

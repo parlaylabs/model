@@ -54,9 +54,8 @@ class RuntimeImpl:
                 return m
         raise AttributeError(f"RuntimeImpl plugins didn't provide a method {name}")
 
-    def service_addr(self, service, graph):
-        m = self.method_lookup("service_addr")
-        return m(service, graph)
+    def __getattr__(self, key):
+        return self.method_lookup(key)
 
 
 def render_graph(graph, outputs):
@@ -110,6 +109,9 @@ def render_graph(graph, outputs):
 def resolve(runtime_name, store):
     global _runtimes
     # Look for a runtime entry in the store
+    if not runtime_name:
+        return None
+    runtime_name = runtime_name.lower()
     if runtime_name in _runtimes:
         return _runtimes[runtime_name]
     rspec = store.runtime[runtime_name]
