@@ -13,6 +13,8 @@ from ..runtime import register, RuntimePlugin
 @dataclass
 class Kubernetes(RuntimePlugin):
     name: str = field(init=False, default="Kubernetes")
+    expose = {"overlay", "ingress"}
+    ingest = {"consul", "cloud"}
 
     def service_addr(self, service, graph):
         return f"{service.name}.{graph.name}.svc.cluster.local"
@@ -311,11 +313,12 @@ class Kubernetes(RuntimePlugin):
         # in the k8s runtime to make this resolve.
         # If the endpoint is in this runtime it will be handled in render_service
         other = relation.get_remote(endpoint.service)
-        if (
-            endpoint.service.runtime is self.runtime_impl
-            and other.service.runtime is not None
-        ):
-            return
+
+        if other.runtime is None or (other.runtime != endpoint.service):
+            expose_remote = other.service.runtime.lookup("expose", set())
+            ingests_local = endpoint.service.runtime.lookup("ingest", set())
+            if not (expose_remote & ingests_local):
+                return
         # The current approach needs DNS resolution (sometimes) in the context
         # of the runtime (for example in AWS regions)
         # XXX: we could fix some of this with init containers
@@ -326,9 +329,19 @@ class Kubernetes(RuntimePlugin):
 
         subsets = []  # {addresses: [{ip:}], ports: [{port:}]}
         # FIXME: addresses should be a list, not single value, still problematic
-        address = other.provided.address
+        try:
+            addresses = other.service.runtime.service_addrs(other.service, graph)
+        except AttributeError:
+            addresses = [other.service.runtime.service_addr(other.service, graph)]
+        if not addresses:
+            address = [other.provided.address]
+        else:
+            address = addresses[0]
         port = other.provided.port
-        subsets.append(dict(addresses=[{"ip": address}], ports=[{"port": int(port)}]))
+        for address in addresses:
+            subsets.append(
+                dict(addresses=[{"ip": address}], ports=[{"port": int(port)}])
+            )
 
         service = dict(
             kind="Service",
