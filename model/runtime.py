@@ -12,6 +12,7 @@ from . import exceptions
 from . import render
 from . import utils
 
+_marker = object()
 _plugins = {}
 _runtimes = {}
 
@@ -43,7 +44,7 @@ class RuntimeImpl:
     def qual_name(self):
         return self.name
 
-    def method_lookup(self, name, reverse=True):
+    def lookup(self, name, reverse=True, default=_marker):
         plugins = self.plugins
         if reverse is True:
             plugins = reversed(plugins)
@@ -52,10 +53,18 @@ class RuntimeImpl:
             m = getattr(p, name, None)
             if m:
                 return m
-        raise AttributeError(f"RuntimeImpl plugins didn't provide a method {name}")
+        if default is not _marker:
+            return default
+        raise AttributeError(f"RuntimeImpl plugins didn't provide an attribute {name}")
+
+    def method_lookup(self, name, reverse=True):
+        m = self.lookup(name, reverse=reverse)
+        if not callable(m):
+            raise TypeError(f"method_lookup() expect to find a method")
+        return m
 
     def __getattr__(self, key):
-        return self.method_lookup(key)
+        return self.lookup(key)
 
 
 def render_graph(graph, outputs):

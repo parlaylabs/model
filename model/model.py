@@ -1,3 +1,5 @@
+import logging
+
 from dataclasses import dataclass, field, asdict
 from typing import Any, Dict, List
 
@@ -9,6 +11,7 @@ from . import schema
 from . import utils
 
 _marker = object()
+log = logging.getLogger(__name__)
 
 
 @dataclass
