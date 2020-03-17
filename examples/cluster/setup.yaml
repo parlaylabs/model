@@ -1,0 +1,19 @@
+---
+kind: Pipeline
+name: setup
+segments:
+  - name: echo
+    kind: Script
+    command: echo "Running echo for {environment.name}"
+  - name: eksctl
+    kind: eksctl
+    command: "get nodegroups --cluster {environment.config['cluster']}"
+  - name: istio
+    kind: Script
+    command:
+      - istioctl
+      - proxy-status
+  - name: monitoring
+    template: templates/monitoring.yaml
+    kind: KubernetesManifest
+    action: get

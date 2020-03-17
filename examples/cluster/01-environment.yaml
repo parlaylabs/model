@@ -1,0 +1,6 @@
+kind: Environment
+name: dev
+config:
+  cluster: dev-eks
+  region: us-east-1
+  public_dns: "example.com"

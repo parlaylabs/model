@@ -54,7 +54,10 @@ class GraphObj:
         # just invoke render(ctx) as needed
         # Env is prepended to the search path here because its location represents a
         # logical play to look for overridden templates
-        template = self.entity.get_template(key, extra=self.graph.environment.entity)
+        extra = None
+        if self.graph:
+            extra = self.graph.environment.entity
+        template = self.entity.get_template(key, extra=extra)
         return template
 
     def fini(self):

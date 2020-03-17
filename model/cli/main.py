@@ -11,6 +11,7 @@ from .. import entity
 from .. import exceptions
 from .. import graph as graph_manager
 from .. import model
+from .. import pipeline
 from .. import render as render_impl
 from .. import runtime as runtime_impl
 from .. import schema, server, store
@@ -115,13 +116,10 @@ class ModelConfig:
         self.runtime = self.get_runtime()
 
 
+_log_levels = ["DEBUG", "INFO", "WARNING", "CRITICAL"]
+_log_levels = _log_levels + [i.lower() for i in _log_levels]
 common_args = [
-    spec(
-        "-l",
-        "--log-level",
-        default="INFO",
-        type=click.Choice(["DEBUG", "INFO", "WARNING", "CRITICAL"]),
-    ),
+    spec("-l", "--log-level", default="INFO", type=click.Choice(_log_levels),),
     spec(
         "-c",
         "--config-dir",
@@ -154,6 +152,29 @@ def component(ctx):
 def init(config, src_ref):
     # XXX: This is just a testing impl, no flexability
     pass
+
+
+@main.group()
+@using(ModelConfig, common_args)
+def pipeline(config, **kwargs):
+    pass
+
+
+@pipeline.command()
+@using(ModelConfig, common_args)
+@click.argument("pipeline_name")
+def run(config, pipeline_name, **kwargs):
+    # First load in the graph references from config
+    # then fine the pipeline object referenced by name
+    # trigger the pipeline using the graph
+    # to either supply arguments or to pass the complete structure
+    config.init()
+    pipeline = config.store.pipeline.get(pipeline_name)
+    if not pipeline:
+        raise exceptions.ConfigurationError(
+            f"unable to find a pipeline {pipeline_name}. Aborting."
+        )
+    pipeline.run(config.store, config.environment)
 
 
 graph_common = [
@@ -270,7 +291,6 @@ def shell(config, **kwargs):
 
     ns = {
         "graphs": graphs,
-        "g": graphs[0],
         "store": config.store,
         "config": config,
         "dump": lambda x: print(utils.dump(x)),
@@ -278,6 +298,8 @@ def shell(config, **kwargs):
         "output": output,
         "utils": utils,
     }
+    if graphs:
+        ns["g"] = graphs[0]
 
     class O:
         def __init__(self, ns):
@@ -290,8 +312,8 @@ def shell(config, **kwargs):
     if env:
         env_name = os.path.basename(env)
         histfile_name = "{}_{}".format(histfile_name, env_name)
-
-        sys.ps1 = f"model ({graphs[0].name}) >>> "
+        name = graphs[0].name if graphs else "default"
+        sys.ps1 = f"model ({name}) >>> "
 
     # set history file
     try:

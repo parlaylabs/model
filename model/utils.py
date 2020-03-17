@@ -13,6 +13,7 @@ from collections import ChainMap
 from dataclasses import fields
 from pathlib import Path
 
+import gitignore_parser
 import jmespath
 import jsonmerge
 import yaml
@@ -353,3 +354,12 @@ def import_submodules(package, recursive=True):
         if recursive and is_pkg:
             results.update(import_submodules(full_name))
     return results
+
+
+def modelignore_matcher(directory):
+    # See if a modelignore file exists and return a matcher or return a truth function
+    mipath = Path(directory / ".modelignore").absolute()
+    if mipath.exists():
+        return gitignore_parser.parse_gitignore(mipath, base_dir=directory)
+    else:
+        return lambda fn: False

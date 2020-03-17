@@ -59,6 +59,7 @@ def register(kind, schema=None, cls=None):
         raise ValueError("must supply schema and/or cls to register")
     if schema and not isinstance(schema, Schema):
         schema = Schema(schema)
+    log.debug(f"Register {kind} schema {schema}")
     schema_map[kind] = (schema, cls)
 
 
@@ -97,7 +98,13 @@ def load_config(store, config_dir):
     if not p.exists():
         raise OSError(f"No config {p} -- post alpha this won't be required")
     if p.is_dir():
+        # If there is a .modelignore file in the directory
+        # use that to drive the loading of model resources
+        modelignore = utils.modelignore_matcher(p)
         for yml in sorted(p.rglob("*.yaml")):
+            yml = yml.absolute()
+            if modelignore(yml):
+                continue
             log.debug(f"Loading config from {yml}")
             load_and_store(yml, store)
         # Validate after all loading is done
