@@ -38,9 +38,14 @@ class Script(Segment):
 
     def run(self, pipeline, store, environment):
         context = dict(environment=environment)
-        cmd = self._prepare(self.command, context)
-        result = self._run(cmd, context)
-        return result and result.returncode == 0
+        cmds = self.get("commands")
+        if not cmds:
+            cmds = [self.command]
+
+        for c in cmds:
+            cmd = self._prepare(c, context)
+            result = self._run(cmd, context)
+            return result and result.returncode == 0
 
     def _prepare(self, cmd, context):
         if isinstance(cmd, list):
@@ -52,29 +57,32 @@ class Script(Segment):
         timeout = self.get("timeout", self.DEFAULT_TIMEOUT)
         result = False
         try:
+            # By using run() we get some nice conveniences, however it is
+            # difficult to pull output as it happens because it only
+            # returns a completed process
             result = subprocess.run(
                 cmd,
                 shell=not isinstance(cmd, (list, tuple)),
                 timeout=timeout,
                 encoding="utf-8",
                 text=True,
+                check=True,
                 capture_output=True,
                 **kwargs,
             )
-            if result.returncode != 0:
-                log.warning(f"ERROR: [{result.returncode}] {cmd} resulted in error")
-                if result:
-                    log.warning(f"{result.stdout}\n{result.stderr}")
+
+        except subprocess.CalledProcessError:
+            log.warning(f"ERROR: [{result.returncode}] {cmd} resulted in error")
+            if result:
+                log.warning(f"{result.stdout}\n{result.stderr}")
         except subprocess.TimeoutExpired as e:
-            log.exception(f"{self.__class__.__name__}: {cmd} expired with timeout")
+            log.exception(f"{self.name}: {cmd} expired with timeout")
         except Exception as e:
-            log.exception(f"{self.__class__.__name__}: {cmd} resulted in error")
+            log.exception(f"{self.name}: {cmd} resulted in error")
             if result:
                 log.warning(f"{result.stdout}\n{result.stderr}")
         else:
-            log.info(
-                f"{self.__class__.__name__}: SUCCESS {cmd}:\n{result.stdout}\n{result.stderr}"
-            )
+            log.info(f"{self.name}: SUCCESS {cmd}\n{result.stdout}\n{result.stderr}")
         return result
 
 
