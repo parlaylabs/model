@@ -1,6 +1,7 @@
 ---
 kind: Pipeline
 name: setup
+runtime: kubernetes
 segments:
   - name: echo
     kind: Script
@@ -11,10 +12,8 @@ segments:
   - name: IstioInstaller
     kind: Script
     commands:
-      #- curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.50 sh -
       - istioctl manifest generate --set values.kiali.enabled=true --set values.global.mtls.enabled=false --set values.global.controlPlaneSecurityEnabled=true
-      # XXX: kiali secret
-      # - istioctl operator init
+      - istioctl operator init
   - name: monitoring
     template: templates/monitoring.yaml
     kind: KubernetesManifest

@@ -27,6 +27,13 @@ class Segment(model.GraphObj):
     def run(self, pipeline, store, environment):
         print(f"Running {self.name}:{self.kind}")
 
+    def _context(self, pipeline, store, environment):
+        context = dict(environment=environment)
+        runtime_name = pipeline.get("runtime")
+        if runtime_name:
+            context["runtime"] = store.runtime.get(runtime_name)
+        return context
+
 
 @register_class
 @dataclass
@@ -37,7 +44,7 @@ class Script(Segment):
     DEFAULT_TIMEOUT = 60
 
     def run(self, pipeline, store, environment):
-        context = dict(environment=environment)
+        context = self._context(pipeline, store, environment)
         cmds = self.get("commands")
         if not cmds:
             cmds = [self.command]
@@ -95,7 +102,7 @@ class KubernetesManifest(Script):
 
     def run(self, pipeline, store, environment):
         template = environment.get_template(self.template)
-        context = dict(environment=environment)
+        context = self._context(pipeline, store, environment)
         rendered = template.render(context)
         action = self.action or "apply"
         result = self._run(
@@ -106,8 +113,10 @@ class KubernetesManifest(Script):
 @register_class
 @dataclass
 class Eksctl(Script):
+    # provisioning can take a long time, this would create a blocking wait
+    # for creates
     def run(self, pipeline, store, environment):
-        context = dict(environment=environment)
+        context = self._context(pipeline, store, environment)
         cmd = self._prepare(f"eksctl {self.command}", context)
         result = self._run(cmd, context)
         return result and result.returncode == 0
