@@ -37,7 +37,10 @@ class GraphObj:
         return self.entity.validate()
 
     def __getattr__(self, key):
-        return self.entity[key]
+        val = self.entity[key]
+        if isinstance(val, dict):
+            val = utils.AttrAccess(val)
+        return val
 
     def get(self, key, default=None):
         return self.entity.get(key, default)
@@ -48,7 +51,7 @@ class GraphObj:
     def __hash__(self):
         return hash((self.name, self.kind))
 
-    def get_template(self, key):
+    def get_template(self, key, paths=None):
         # Support getting a jinja2 template relative to defintion
         # of any graph obj.
         # just invoke render(ctx) as needed
@@ -57,7 +60,7 @@ class GraphObj:
         extra = None
         if self.graph:
             extra = self.graph.environment.entity
-        template = self.entity.get_template(key, extra=extra)
+        template = self.entity.get_template(key, extra=extra, paths=paths)
         return template
 
     def fini(self):

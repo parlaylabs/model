@@ -68,9 +68,9 @@ class Entity:
                 return None
         else:
             if name:
-                base = "file://" + str(Path(base).parent / name)
+                base = "file://" + str((Path(base).parent / name).resolve())
             else:
-                base = "file://" + str(Path(base).parent)
+                base = "file://" + str(Path(base).parent.resolve())
         return base
 
     def file_search_path(self, name=None):
@@ -81,12 +81,16 @@ class Entity:
             paths[self.relative_file(name=name, offset=i)] = 1
         return list(filter(None, paths.keys()))
 
-    def get_template(self, name, jinja_env=None, extra=None):
+    def get_template(self, name, jinja_env=None, extra=None, paths=None):
+        if paths and isinstance(paths, (list, tuple)):
+            paths = list([self.relative_file(Path(p) / name) for p in paths])
+        else:
+            paths = []
         if not jinja_env:
             jinja_env = template.get_env()
-        paths = self.file_search_path(name)
+        paths += self.file_search_path(name)
         if extra:
-            path = extra.file_search_path(name) + paths
+            paths = extra.file_search_path(name) + paths
         return jinja_env.select_template(paths)
 
     def __hash__(self):
