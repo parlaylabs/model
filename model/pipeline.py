@@ -3,7 +3,9 @@ import subprocess
 import time
 
 from dataclasses import dataclass, field
-from typing import Any, List
+from typing import Any, Dict, List
+
+import jsonmerge
 
 from . import exceptions
 from . import model
@@ -24,12 +26,24 @@ class Segment(model.GraphObj):
     """When Pipeline Segments run they are expected to enforce loosely idempotent state changes
     such that more than one invocation should only progress towards the expected state."""
 
-    def run(self, pipeline, store, environment):
+    pipeline: "Pipeline"
+
+    def dispatch(self):
+        "return the correct method/action to run for a given step"
+        action = self.get("action", "run")
+        method = getattr(self, action, None)
+        if not method:
+            raise exceptions.ConfigurationError(
+                f"Pipeline segment has undefined or missing action: {action}"
+            )
+        return method
+
+    def run(self, store, environment):
         print(f"Running {self.name}:{self.kind}")
 
-    def _context(self, pipeline, store, environment):
-        context = dict(environment=environment)
-        runtime_name = pipeline.get("runtime")
+    def _context(self, store, environment):
+        context = dict(environment=environment, pipeline=self.pipeline)
+        runtime_name = self.pipeline.get("runtime")
         if runtime_name:
             context["runtime"] = store.runtime.get(runtime_name)
         return context
@@ -43,8 +57,8 @@ class Script(Segment):
 
     DEFAULT_TIMEOUT = 60
 
-    def run(self, pipeline, store, environment):
-        context = self._context(pipeline, store, environment)
+    def run(self, store, environment):
+        context = self._context(store, environment)
         cmds = self.get("commands")
         if not cmds:
             cmds = [self.command]
@@ -52,7 +66,6 @@ class Script(Segment):
         for c in cmds:
             cmd = self._prepare(c, context)
             result = self._run(cmd, context)
-            return result and result.returncode == 0
 
     def _prepare(self, cmd, context):
         if isinstance(cmd, list):
@@ -100,13 +113,33 @@ class KubernetesManifest(Script):
     The manifest is first subject to interpolation using the model and jinja2 templating.
     """
 
-    def run(self, pipeline, store, environment):
+    def run(self, store, environment):
         template = environment.get_template(self.template)
-        context = self._context(pipeline, store, environment)
+        context = self._context(store, environment)
         rendered = template.render(context)
-        action = self.action or "apply"
+        action = self.command or "apply"
         result = self._run(
             cmd=f"kubectl {action} -f -", context=context, input=rendered
+        )
+
+    def patch(self, store, environment):
+        # Strategy is
+        # - read the object
+        # - read the template
+        # - do a full object patch (jsonmerge)
+        # - replace the object
+        namespace = self.namespace or "default"
+        resource = environment.runtime.method_lookup("get_resource")(
+            self.resource, namespace=namespace, strip=True
+        )
+        template = environment.get_template(self.template)
+        context = self._context(store, environment)
+        rendered = template.render(context)
+        output = jsonmerge.merge(resource, rendered)
+        self._run(
+            cmd=f"kubectl replace -n {namespace} {self.resource} -f -",
+            context=context,
+            input=output,
         )
 
 
@@ -115,11 +148,24 @@ class KubernetesManifest(Script):
 class Eksctl(Script):
     # provisioning can take a long time, this would create a blocking wait
     # for creates
-    def run(self, pipeline, store, environment):
-        context = self._context(pipeline, store, environment)
+    def run(self, store, environment):
+        context = self._context(store, environment)
         cmd = self._prepare(f"eksctl {self.command}", context)
         result = self._run(cmd, context)
         return result and result.returncode == 0
+
+    def replace_nodegroups(self, store, environment):
+        # PLAN copy the input eksctl and create a modified version with updated
+        # node groups. We want to do it this way to preserve things like the IAM
+        # permissions associated with the the NG
+        # After the NG is created
+        context = self._context(store, environment)
+        context["config"] = utils.interpolate(self.pipeline.config, context)
+        eks_config_name = context["config"]["eksctl_config"]
+        paths = context["config"].get("template_paths")
+        eksconfig = self.pipeline.get_template(eks_config_name, paths=paths)
+        rendered = eksconfig.render(context)
+        print(rendered)
 
 
 @schema.register_class
@@ -142,7 +188,10 @@ class Pipeline(model.GraphObj):
                         f"unknown segment type {segment['kind']} in segment {segment['name']}"
                     )
                 segment = cls(
-                    name=segment["name"], kind=segment["kind"], entity=segment
+                    pipeline=self,
+                    name=segment["name"],
+                    kind=segment["kind"],
+                    entity=segment,
                 )
             instances.append(segment)
         self.segments = instances
@@ -153,4 +202,5 @@ class Pipeline(model.GraphObj):
             # this means its either
             #    a plugin (getting passed the graph objects)
             #    a script (mapping args via interpolation)
-            segment.run(self, store, environment)
+            action = segment.dispatch()
+            action(store, environment)
