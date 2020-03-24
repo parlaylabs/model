@@ -80,6 +80,7 @@ class Script(Segment):
             # By using run() we get some nice conveniences, however it is
             # difficult to pull output as it happens because it only
             # returns a completed process
+            log.debug(f"Run '{cmd}' with {kwargs}")
             result = subprocess.run(
                 cmd,
                 shell=not isinstance(cmd, (list, tuple)),
