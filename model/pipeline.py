@@ -148,14 +148,15 @@ class KubernetesManifest(Script):
         template = environment.get_template(self.template)
         context = self._context(store, environment)
         rendered = template.render(context)
-        rendered = yaml.load(rendered)
+        rendered = yaml.safe_load(rendered)
         output = utils.apply_overrides(resource, rendered["config"])
         output = yaml.dump(output)
-        self._run(
-            cmd=f"kubectl replace -n {self.namespace} {self.resource} -f -",
-            context=context,
-            input=output,
-        )
+        log.debug(output)
+        # self._run(
+        #     cmd=f"kubectl replace -n {self.namespace} {self.resource} -f -",
+        #     context=context,
+        #     input=output,
+        # )
 
 
 @register_class
