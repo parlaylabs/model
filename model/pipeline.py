@@ -152,7 +152,7 @@ class KubernetesManifest(Script):
         output = utils.apply_overrides(resource, rendered["config"])
         output = yaml.dump(output)
         self._run(
-            cmd=f"kubectl replace -n {namespace} {self.resource} -f -",
+            cmd=f"kubectl replace -n {self.namespace} {self.resource} -f -",
             context=context,
             input=output,
         )

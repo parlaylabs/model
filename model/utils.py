@@ -113,8 +113,8 @@ def merge_paths(obj, overrides, schema=None, inline=False, format="yaml"):
         o = prop_get(obj, expr)
         if inline:
             if format == "yaml":
-                o = yaml.load(o)
-                data = yaml.load(data)
+                o = yaml.safe_load(o)
+                data = yaml.safe_load(data)
             else:
                 raise ValueError("unknown format")
         result = jsonmerge.merge(o, data, schema=schema)
