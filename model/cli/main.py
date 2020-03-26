@@ -170,6 +170,7 @@ def run(config, pipeline_name, **kwargs):
     # to either supply arguments or to pass the complete structure
     config.init()
     pipeline = config.store.pipeline.get(pipeline_name)
+    pipeline.runtime = config.get_runtime(pipeline.runtime)
     if not pipeline:
         raise exceptions.ConfigurationError(
             f"unable to find a pipeline {pipeline_name}. Aborting."

@@ -58,7 +58,10 @@ class RuntimeImpl:
         raise AttributeError(f"RuntimeImpl plugins didn't provide an attribute {name}")
 
     def method_lookup(self, name, reverse=True):
-        m = self.lookup(name, reverse=reverse)
+        try:
+            m = self.lookup(name, reverse=reverse)
+        except AttributeError:
+            m = None
         if not callable(m):
             raise TypeError(f"method_lookup() expect to find a method")
         return m

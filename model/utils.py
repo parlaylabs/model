@@ -72,7 +72,30 @@ def nested_set(obj, path, value):
     return obj
 
 
-def merge_paths(obj, overrides, schema=None):
+def apply_overrides(obj, plan):
+    """plan_overrides maps from a list of data plans to produce a jsonmerge schema 
+    and data to drive merge_paths
+    
+    Arguments:
+        obj -- object to update
+        plan -- list of {path: str, strategy: [append, overwrite, arrayMergeById], data: Any, extras}
+    """
+    for p in plan:
+        path = p["path"]
+        name = path.rsplit(".", 1)[-1]
+        inline = p.get("inline", False)
+        data = p["data"]
+        # XXX: this is flat, but could build a deeply nested schema to recreate the path properly
+        strat = p.get("strategy", "objectMerge")
+        schema = {"mergeStrategy": strat}
+        if strat == "arrayMergeById":
+            schema["idRef"] = p.get("id", "id")
+        fmt = p.get("format", "yaml")
+        obj = merge_path(obj, path, data, schema=schema, inline=inline, format=fmt)
+    return obj
+
+
+def merge_paths(obj, overrides, schema=None, inline=False, format="yaml"):
     """
     Run a series of merge operations based on overrides.
 
@@ -88,14 +111,23 @@ def merge_paths(obj, overrides, schema=None):
         schema = {}
     for expr, data in overrides.items():
         o = prop_get(obj, expr)
+        if inline:
+            if format == "yaml":
+                o = yaml.load(o)
+                data = yaml.load(data)
+            else:
+                raise ValueError("unknown format")
         result = jsonmerge.merge(o, data, schema=schema)
+        if inline:
+            if format == "yaml":
+                result = yaml.dump(result)
         nested_set(obj, expr, result)
     return obj
 
 
-def merge_path(obj, path, data, schema=None):
+def merge_path(obj, path, data, schema=None, inline=False, format="yaml"):
     overrides = {path: data}
-    return merge_paths(obj, overrides, schema=schema)
+    return merge_paths(obj, overrides, schema=schema, inline=inline, format=format)
 
 
 _fstring_expr = re.compile("{(?P<expr>[^}]+?)}|(?P<str>[^{]+)")

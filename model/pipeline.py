@@ -1,3 +1,4 @@
+import json
 import logging
 import subprocess
 import time
@@ -5,8 +6,9 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
-import jsonmerge
+import yaml
 
+from . import entity
 from . import exceptions
 from . import model
 from . import schema
@@ -91,9 +93,8 @@ class Script(Segment):
                 capture_output=True,
                 **kwargs,
             )
-
-        except subprocess.CalledProcessError:
-            log.warning(f"ERROR: [{result.returncode}] {cmd} resulted in error")
+        except subprocess.CalledProcessError as e:
+            log.warning(f"ERROR: [{e.returncode}] {cmd} resulted in error")
             if result:
                 log.warning(f"{result.stdout}\n{result.stderr}")
         except subprocess.TimeoutExpired as e:
@@ -103,7 +104,7 @@ class Script(Segment):
             if result:
                 log.warning(f"{result.stdout}\n{result.stderr}")
         else:
-            log.info(f"{self.name}: SUCCESS {cmd}\n{result.stdout}\n{result.stderr}")
+            log.debug(f"{self.name}: SUCCESS {cmd}\n{result.stdout}\n{result.stderr}")
         return result
 
 
@@ -123,20 +124,33 @@ class KubernetesManifest(Script):
             cmd=f"kubectl {action} -f -", context=context, input=rendered
         )
 
+    def get_resource(self, resource, namespace="default", strip=False):
+        result = self._run(
+            cmd=f"kubectl get -n {namespace} -o json {resource}", context=None
+        )
+        resource = json.loads(result.stdout)
+        if strip:
+            md = resource["metadata"]
+            dels = set(md.keys()) - {"name", "namespace", "labels", "annotations"}
+            for k in dels:
+                del md[k]
+        return resource
+
     def patch(self, store, environment):
         # Strategy is
         # - read the object
         # - read the template
         # - do a full object patch (jsonmerge)
         # - replace the object
-        namespace = self.namespace or "default"
-        resource = environment.runtime.method_lookup("get_resource")(
-            self.resource, namespace=namespace, strip=True
+        resource = self.get_resource(
+            self.resource, namespace=self.namespace, strip=True
         )
         template = environment.get_template(self.template)
         context = self._context(store, environment)
         rendered = template.render(context)
-        output = jsonmerge.merge(resource, rendered)
+        rendered = yaml.load(rendered)
+        output = utils.apply_overrides(resource, rendered["config"])
+        output = yaml.dump(output)
         self._run(
             cmd=f"kubectl replace -n {namespace} {self.resource} -f -",
             context=context,
@@ -188,12 +202,13 @@ class Pipeline(model.GraphObj):
                     raise exceptions.ConfigurationError(
                         f"unknown segment type {segment['kind']} in segment {segment['name']}"
                     )
+                e = entity.Entity(segment, src_ref=self.src_ref)
                 segment = cls(
-                    pipeline=self,
-                    name=segment["name"],
-                    kind=segment["kind"],
-                    entity=segment,
+                    pipeline=self, name=segment["name"], kind=segment["kind"], entity=e,
                 )
+            ns = e.get("namespace", "default")
+            segment.namespace = ns
+
             instances.append(segment)
         self.segments = instances
 
