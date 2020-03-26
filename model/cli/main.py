@@ -163,7 +163,8 @@ def pipeline(config, **kwargs):
 @pipeline.command()
 @using(ModelConfig, common_args)
 @click.argument("pipeline_name")
-def run(config, pipeline_name, **kwargs):
+@click.argument("segment", required=False, default=None, nargs=-1)
+def run(config, pipeline_name, segment, **kwargs):
     # First load in the graph references from config
     # then fine the pipeline object referenced by name
     # trigger the pipeline using the graph
@@ -175,7 +176,7 @@ def run(config, pipeline_name, **kwargs):
         raise exceptions.ConfigurationError(
             f"unable to find a pipeline {pipeline_name}. Aborting."
         )
-    pipeline.run(config.store, config.environment)
+    pipeline.run(config.store, config.environment, segments=segment)
 
 
 graph_common = [

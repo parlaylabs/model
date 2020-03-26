@@ -213,8 +213,10 @@ class Pipeline(model.GraphObj):
             instances.append(segment)
         self.segments = instances
 
-    def run(self, store, environment):
+    def run(self, store, environment, segments=None):
         for segment in self.segments:
+            if segments and segment.name not in segments:
+                continue
             # Adapt the calling convention to each type of segment
             # this means its either
             #    a plugin (getting passed the graph objects)
