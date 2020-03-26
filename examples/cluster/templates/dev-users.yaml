@@ -1,0 +1,37 @@
+kind: Patch
+name: users
+config:
+  - path: data.mapRoles
+    strategy: arrayMergeById
+    id: rolearn
+    inline: true
+    data: |
+      - groups:
+        - system:masters
+        rolearn: arn:aws:iam::111111111111:role/eks-master-access
+        username: admin
+      - groups:
+        - k8s-dev
+        rolearn: arn:aws:iam::111111111111:role/eks-dev-access
+        username: k8s-dev
+      - groups:
+        - k8s-user
+        rolearn: arn:aws:iam::111111111111:role/eks-user-access
+        username: k8s-user
+  - path: data.mapUsers
+    strategy: arrayMergeById
+    id: userarn
+    inline: true
+    data: |
+      - groups:
+        - system:masters
+        userarn: arn:aws:iam::111111111111:user/georgi
+        username: georgi
+      - groups:
+        - system:masters
+        userarn: arn:aws:iam::111111111111:user/jameel
+        username: jameel
+      - groups:
+        - system:masters
+        userarn: arn:aws:iam::111111111111:user/ben.saller
+        username: bcsaller

@@ -6,15 +6,21 @@ segments:
   - name: echo
     kind: Script
     command: echo "Running echo for {environment.name}"
+  - name: User Management
+    kind: KubernetesManifest
+    action: patch
+    namespace: kube-system
+    resource: configmap/aws-auth
+    template: templates/dev-users.yaml
   - name: eksctl
     kind: eksctl
-    command: "get nodegroups --cluster {environment.config['cluster']} -o json"
+    command: "get nodegroups --cluster {environment.config['cluster']}"
   - name: IstioInstaller
     kind: Script
     commands:
       - istioctl manifest generate --set values.kiali.enabled=true --set values.global.mtls.enabled=false --set values.global.controlPlaneSecurityEnabled=true
       - istioctl operator init
-  - name: monitoring
+  - name: Threatstack
     template: templates/monitoring.yaml
     kind: KubernetesManifest
-    action: get
+    command: get
