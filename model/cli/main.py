@@ -95,7 +95,7 @@ class ModelConfig:
             level_styles=level_styles,
             fmt="[%(name)s:%(levelname)s] [%(filename)s:%(lineno)s (%(funcName)s)] %(message)s",
         )
-        logging.getLogger("jsonmerge").setLevel(logging.WARNING)
+        # logging.getLogger("jsonmerge").setLevel(logging.WARNING)
         logging.getLogger("botocore").setLevel(logging.WARNING)
         logging.getLogger("urllib3").setLevel(logging.WARNING)
 

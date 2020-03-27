@@ -87,9 +87,9 @@ def apply_overrides(obj, plan):
         data = p["data"]
         # XXX: this is flat, but could build a deeply nested schema to recreate the path properly
         strat = p.get("strategy", "objectMerge")
-        schema = {"mergeStrategy": strat}
+        schema = {"mergeStrategy": strat, "mergeOptions": {}}
         if strat == "arrayMergeById":
-            schema["idRef"] = p.get("id", "id")
+            schema["mergeOptions"]["idRef"] = p.get("id", "id")
         fmt = p.get("format", "yaml")
         obj = merge_path(obj, path, data, schema=schema, inline=inline, format=fmt)
     return obj
