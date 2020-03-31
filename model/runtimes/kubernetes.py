@@ -374,4 +374,3 @@ class Kubernetes(RuntimePlugin):
             endpoint=other,
             graph=graph,
         )
-

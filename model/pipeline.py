@@ -1,6 +1,9 @@
+import io
 import json
 import logging
+import re
 import subprocess
+import tempfile
 import time
 
 from dataclasses import dataclass, field
@@ -75,37 +78,41 @@ class Script(Segment):
         cmd = utils.interpolate(cmd, context)
         return cmd
 
-    def _run(self, cmd, context, **kwargs):
+    def _run(self, cmd, context=None, **kwargs):
         timeout = self.get("timeout", self.DEFAULT_TIMEOUT)
-        result = False
+        if "timeout" not in kwargs:
+            kwargs["timeout"] = timeout
+        timeout = kwargs.pop("timeout")
+        input = kwargs.pop("input", None)
         try:
-            # By using run() we get some nice conveniences, however it is
-            # difficult to pull output as it happens because it only
-            # returns a completed process
-            log.debug(f"Run '{cmd}' with {kwargs}")
-            result = subprocess.run(
+            log.debug(f"Run '{cmd}' with {kwargs}\n{input}")
+            with subprocess.Popen(
                 cmd,
                 shell=not isinstance(cmd, (list, tuple)),
-                timeout=timeout,
                 encoding="utf-8",
                 text=True,
-                check=True,
-                capture_output=True,
+                stdin=subprocess.PIPE if input else subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 **kwargs,
-            )
-        except subprocess.CalledProcessError as e:
-            log.warning(f"ERROR: [{e.returncode}] {cmd} resulted in error")
-            if result:
-                log.warning(f"{result.stdout}\n{result.stderr}")
+            ) as proc:
+                out, err = proc.communicate(input, timeout=timeout)
+
+                if proc.returncode != 0:
+                    raise subprocess.CalledProcessError(
+                        proc.returncode, cmd, output=out, stderr=err
+                    )
         except subprocess.TimeoutExpired as e:
-            log.exception(f"{self.name}: {cmd} expired with timeout")
-        except Exception as e:
+            log.exception(f"{self.name}: {cmd} expired with timeout.\n{out}\n{err}")
+        except (subprocess.CalledProcessError, OSError, Exception) as e:
             log.exception(f"{self.name}: {cmd} resulted in error")
-            if result:
-                log.warning(f"{result.stdout}\n{result.stderr}")
+            log.warning(out, err)
         else:
-            log.debug(f"{self.name}: SUCCESS {cmd}\n{result.stdout}\n{result.stderr}")
-        return result
+            log.debug(f"{self.name}: SUCCESS {cmd}\n{out}\n{err}")
+            proc.stdout = out
+            proc.stderr = err
+            return proc
+        return False
 
 
 @register_class
@@ -120,9 +127,7 @@ class KubernetesManifest(Script):
         context = self._context(store, environment)
         rendered = template.render(context)
         action = self.command or "apply"
-        result = self._run(
-            cmd=f"kubectl {action} -f -", context=context, input=rendered
-        )
+        return self._run(cmd=f"kubectl {action} -f -", context=context, input=rendered)
 
     def get_resource(self, resource, namespace="default", strip=False):
         result = self._run(
@@ -152,11 +157,14 @@ class KubernetesManifest(Script):
         output = utils.apply_overrides(resource, rendered["config"])
         output = yaml.dump(output)
         log.debug(output)
-        # self._run(
-        #     cmd=f"kubectl replace -n {self.namespace} {self.resource} -f -",
-        #     context=context,
-        #     input=output,
-        # )
+        self._run(
+            cmd=f"kubectl replace -n {self.namespace} {self.resource} -f -",
+            context=context,
+            input=output,
+        )
+
+
+_nodegroup_re = re.compile(r"(?P<name>[-\w]+)(-(?P<num>\d+))")
 
 
 @register_class
@@ -167,8 +175,72 @@ class Eksctl(Script):
     def run(self, store, environment):
         context = self._context(store, environment)
         cmd = self._prepare(f"eksctl {self.command}", context)
-        result = self._run(cmd, context)
-        return result and result.returncode == 0
+        return self._run(cmd, context)
+
+    def _parse_name(self, name):
+        num = 0
+        match = _nodegroup_re.match(name)
+        if match:
+            name = match.group("name")
+            num = match.group("num")
+        return name, int(num)
+
+    def _select_nodegroups(self, config, name=None, labels=None):
+        """
+        Support selecting nodegroup(s) which have a single name and/or filtered by labels. 
+        If labels are provided all must match. 
+        labels can be passed as a dict of key/value pairs
+
+        We also must look at the total set of nodegroups and identify a naming pattern
+        to return the next number at which we should start naming ngs. This assumes
+        a <name>-<num> pattern. However if the pattern fails to match it only means that 
+        we can add -<num> to the existing names to increment the nodegroups. 
+        """
+        ngs = config.get("nodeGroups")
+        matches = []
+        if not ngs:
+            raise exceptions.ConfigurationError("No nodeGroups in config file")
+        if labels:
+            ngs = utils.filter_iter(ngs, query={"labels": labels})
+        if name:
+            ngs = utils.filter_iter(ngs, name=name)
+        ngs = list(ngs)
+        if not ngs:
+            raise exceptions.ConfigurationError(
+                f"node group selector name: {name} labels: {labels} matched nothing"
+            )
+        base = max([self._parse_name(ng["name"])[1] for ng in ngs])
+        return ngs, base
+
+    def _clone_ng_data(self, template, name=None, labels=None):
+        ngs, base = self._select_nodegroups(template, name, labels)
+        cloned = []
+        namemap = {}
+        i = base
+        for ng in ngs:
+            i += 1
+            name, _ = self._parse_name(ng["name"])
+            name = f"{name}-{i}"
+            namemap[ng["name"]] = name
+            ng["name"] = name
+            cloned.append(ng)
+        result = template.copy()
+        result["nodeGroups"] = ngs
+
+        return result, namemap
+
+    def _verify_config(self, data, store, environment):
+        # very simple sanity checks
+        assert data.get("kind") == "ClusterConfig"
+        assert data.get("apiVersion", "").startswith("eksctl.io/v1")
+        md = data.get("metadata", {})
+        name = md.get("name")
+        if name:
+            assert name == environment.config["cluster"]
+        region = md.get("region")
+        if region:
+            assert region == environment.config["region"]
+        assert data.get("nodeGroups")
 
     def replace_nodegroups(self, store, environment):
         # PLAN copy the input eksctl and create a modified version with updated
@@ -180,8 +252,32 @@ class Eksctl(Script):
         eks_config_name = context["config"]["eksctl_config"]
         paths = context["config"].get("template_paths")
         eksconfig = self.pipeline.get_template(eks_config_name, paths=paths)
-        rendered = eksconfig.render(context)
-        print(rendered)
+        config = eksconfig.render(context)
+        config = utils.AttrAccess(yaml.safe_load(config))
+        self._verify_config(config, store, environment)
+        name = self.get("nodegroup")
+        labels = self.get("labels")
+        config, namemap = self._clone_ng_data(config, name=name, labels=labels)
+        log.info(
+            "Creating and draining nodegroups can take a substantial amount of time, 20m default timeout"
+        )
+        # XXX: run loop in parallel??
+        cn = config["metadata"]["name"]
+        for old, new in namemap.items():
+            # create the new group
+            log.info(f"creating new node group {new}")
+            self._run(
+                f"eksctl create nodegroup --config-file - --include='{new}'",
+                input=config,
+            )
+            # XXX: We almost certainly want a wait-nodes loop here
+            # delete the old group
+            # this will do the drain as well
+            log.info(f"deleting old nodegroup {old}")
+            self._run(
+                f"eksctl delete nodegroup -w --approve --cluster={cn} {old}",
+                timeout=(20 * 60),
+            )
 
 
 @schema.register_class
