@@ -109,7 +109,7 @@ class Script(Segment):
             log.exception(f"{self.name}: {cmd} expired with timeout.\n{out}\n{err}")
         except (subprocess.CalledProcessError, OSError, Exception) as e:
             log.exception(f"{self.name}: {cmd} resulted in error")
-            log.warning(out, err)
+            log.warning(f"{out}\n{err}")
         else:
             log.debug(f"{self.name}: SUCCESS {cmd}\n{out}\n{err}")
             proc.stdout = out
