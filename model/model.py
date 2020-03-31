@@ -66,9 +66,11 @@ class GraphObj:
     def fini(self):
         self._interpolate_entity()
 
-    def _interpolate_entity(self):
+    def _interpolate_entity(self, context=None):
+        if not context: 
+            context = self.context
         data = self.entity.serialized()
-        data = utils.interpolate(data, self.context)
+        data = utils.interpolate(data, context)
         self.entity.add_facet(data, "<interpolated>")
 
 

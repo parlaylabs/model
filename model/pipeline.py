@@ -51,6 +51,9 @@ class Segment(model.GraphObj):
         runtime_name = self.pipeline.get("runtime")
         if runtime_name:
             context["runtime"] = store.runtime.get(runtime_name)
+        # XXX: need a general solution to this
+        self.pipeline._interpolate_entity(context)
+        context = utils.interpolate(context, context)
         return context
 
 
