@@ -1,0 +1,21 @@
+---
+kind: Pipeline
+name: upgrade
+runtime: kubernetes
+config:
+  template_paths: ["../assets/templates/", "templates"]
+  eksctl_config: "{environment.config['cluster']}-{environment.config['region']}.yaml"
+segments:
+  # - name: Upgrade Core Services
+  #   kind: Script
+  #   commands:
+  #     - "eksctl utils update-kube-proxy --cluster {environment.config['cluster']} --approve"
+  #     - "eksctl utils update-aws-node--cluster {environment.config['cluster']} --approve"
+  #     - "eksctl utils update-coredns --cluster {environment.config['cluster']} --approve"
+  #     # - "eksctl utils update-cluster-logging --cluster {environment.config['cluster']}"
+  - name: Replace Nodegroups
+    kind: eksctl
+    action: replace_nodegroups
+    labels:
+      kind: reserved
+      role: compute
