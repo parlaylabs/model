@@ -203,7 +203,7 @@ class Kubernetes(RuntimePlugin):
             "app.kubernetes.io/component": service.entity.name,
             # XXX: become a graph ref
             "app.kubernetes.io/part-of": graph.name,
-            "app.kubernetes.io/managed-by": __package__,
+            "app.kubernetes.io/managed-by": "model",
         }
 
         self.add_namespace(graph, output)
