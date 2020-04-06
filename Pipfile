@@ -23,7 +23,6 @@ requests = "*"
 requests-file = "*"
 boto3 = "*"
 coloredlogs = "*"
-model = {editable = true,path = "."}
 gitignore-parser = "*"
 
 [requires]
