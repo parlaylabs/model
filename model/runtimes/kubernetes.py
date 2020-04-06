@@ -3,10 +3,14 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from ..config import get_model_config
 from .. import docker
 from .. import exceptions
 from .. import utils
 from ..runtime import register, RuntimePlugin
+
+
+cfg = get_model_config()
 
 
 @register
@@ -46,7 +50,7 @@ class Kubernetes(RuntimePlugin):
             "metadata": {"name": name, "namespace": graph.name,},
         }
         output.add(
-            f"01-service-account.yaml", data, self, graph=graph,
+            f"01-service-account.yaml", data, self, graph=graph, ignore_existing=True
         )
         return name
 
@@ -199,7 +203,8 @@ class Kubernetes(RuntimePlugin):
     def render_service(self, service, graph, output):
         labels = {
             "app.kubernetes.io/name": service.name,
-            "app.kubernetes.io/version": str(service.entity.version),
+            "app.kubernetes.io/instance": f"{graph.name}-{service.name}-{service.version}",
+            "app.kubernetes.io/version": str(service.version),
             "app.kubernetes.io/component": service.entity.name,
             # XXX: become a graph ref
             "app.kubernetes.io/part-of": graph.name,

@@ -61,10 +61,12 @@ class Renderer(list):
         self.root = Path(root)
         self.index = {}  # name -> Output
 
-    def add(self, name, data, plugin, **kwargs):
+    def add(self, name, data, plugin, ignore_existing=False, **kwargs):
         if name in self.index:
             # we are replacing an old entity
             # we could/should notify user?
+            if ignore_existing:
+                return
             log.warning(
                 f"{name} already exists in output, either use update() or fix logic"
             )
@@ -135,4 +137,3 @@ class FileRenderer(Renderer):
                     data = [data]
                 print("---", file=fp)
                 yaml.dump_all(data, stream=fp)
-

@@ -2,11 +2,16 @@ kind: Runtime
 name: kubernetes
 plugins:
     - name: Docker
+      path: model.runtimes.docker.Docker
     - name: Kubernetes
+      path: model.runtimes.kubernetes.Kubernetes
     - name: Istio
+      path: model.runtimes.istio.Istio
     - name: Kustomize
+      path: model.runtimes.kustomize.Kustomize
 ---
 kind: Runtime
 name: ec2
-plugins: 
+plugins:
     - name: EC2
+      path: model.runtimes.ec2.EC2

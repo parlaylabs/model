@@ -388,6 +388,18 @@ def import_submodules(package, recursive=True):
     return results
 
 
+def import_object(path, package=None):
+    classpath, name = path.rsplit(".", 1)
+    module = importlib.import_module(classpath, package=package)
+    try:
+        return getattr(module, name)
+    except AttributeError:
+        raise ImportError(
+            f"Failed import {name} from ({package}){classpath} at {module.__file__}"
+        )
+    return obj
+
+
 def modelignore_matcher(directory):
     # See if a modelignore file exists and return a matcher or return a truth function
     mipath = Path(directory / ".modelignore").absolute()

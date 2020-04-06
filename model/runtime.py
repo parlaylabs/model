@@ -7,6 +7,7 @@ from typing import List
 
 import yaml
 
+from . import config
 from . import docker
 from . import exceptions
 from . import render
@@ -127,19 +128,28 @@ def resolve(runtime_name, store):
     if runtime_name in _runtimes:
         return _runtimes[runtime_name]
     rspec = store.runtime[runtime_name]
-    plugins = resolve_each(rspec.plugins)
+    plugins = resolve_plugins(rspec.plugins)
     runtime = RuntimeImpl(runtime_name, plugins=plugins)
     _runtimes[runtime_name] = runtime
     store.add(runtime)
     return runtime
 
 
-def resolve_each(plugins):
+def resolve_plugins(plugins):
     impls = []
     for p in plugins:
-        name = p["name"]
-        if name not in _plugins:
-            # attempt to load it from the runtimes submodule
-            utils.import_submodules("model.runtimes")
-        impls.append(_plugins[p["name"].lower()]())
+        name = p.get("name", "").lower()
+        path = p.get("path")
+        if path:
+            cls = utils.import_object(path)
+            plug = cls()
+            if not name:
+                name = plug.__class__.__name__.lower()
+            _plugins[name] = cls
+        else:
+            if name not in _plugins:
+                # attempt to load it from the runtimes submodule
+                utils.import_submodules("model.runtimes")
+                plug = _plugins[name]()
+        impls.append(plug)
     return impls
