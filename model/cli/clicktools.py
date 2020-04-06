@@ -4,6 +4,8 @@ from functools import wraps
 
 import click
 
+from ..config import get_model_config
+
 
 class spec(dict):
     def __init__(self, *args, **kwargs):
@@ -26,7 +28,7 @@ class spec(dict):
         return f"<spec {self.args} {super().__repr__()}>"
 
 
-def using(configObj, *cmds):
+def using(*cmds):
     def _add_option(func, option):
         return click.option(*option.args, expose_value=True, **option)(func)
 
@@ -35,6 +37,7 @@ def using(configObj, *cmds):
             for option in argspecs:
                 f = _add_option(f, option)
 
-        return click.make_pass_decorator(configObj, True)(f)
+        configObj = get_model_config()
+        return click.make_pass_decorator(configObj.__class__, True)(f)
 
     return decorator
