@@ -140,8 +140,9 @@ def resolve_plugins(plugins):
     for p in plugins:
         name = p.get("name", "").lower()
         path = p.get("path")
+        package = p.get("package")
         if path:
-            cls = utils.import_object(path)
+            cls = utils.import_object(path, package=package)
             plug = cls()
             if not name:
                 name = plug.__class__.__name__.lower()
