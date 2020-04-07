@@ -71,7 +71,6 @@ class Script(Segment):
         cmds = self.get("commands")
         if not cmds:
             cmds = [self.command]
-
         for c in cmds:
             cmd = self._prepare(c, context)
             result = self._run(cmd, context)
@@ -133,7 +132,13 @@ class KubernetesManifest(Script):
         context = self._context(store, environment)
         rendered = template.render(context)
         action = self.command or "apply"
-        return self._run(cmd=f"kubectl {action} -f -", context=context, input=rendered)
+        # Look at the rendered content, it might be multi-part yaml (via ---)
+        # if it is we must apply each object in turn
+        yamlobjs = yaml.safe_load_all(rendered)
+        for yamlobj in yamlobjs:
+            yamlobj = yaml.safe_dump(yamlobj)
+            self._run(cmd=f"kubectl {action} -f -", context=context, input=yamlobj)
+        return True
 
     def get_resource(self, resource, namespace="default", strip=False):
         result = self._run(
