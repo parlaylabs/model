@@ -13,6 +13,7 @@ log = logging.getLogger(cmd_name)
 class ModelConfig:
     def __init__(self):
         self.store = store.Store()
+        self._environment = None
 
     def get_runtime(self, name=None):
         if not self.store:
@@ -30,8 +31,12 @@ class ModelConfig:
         return runtime_impl.resolve(name, self.store)
 
     def get_environment(self, name=None):
+        save = name is None
         if not self.store:
             return
+        if self._environment:
+            return self._environment
+
         envs = list(self.store.environment.keys())
         if len(envs) == 1:
             if name and envs[0] != name:
@@ -41,7 +46,14 @@ class ModelConfig:
         else:
             if not name:
                 name = self.find("environment")
-        return self.store.environment[name]
+        env = self.store.environment[name]
+        if save:
+            self._environment = env
+        return env
+
+    @property
+    def environment(self):
+        return self.get_environment()
 
     def find(self, name, default=None, ctx=None):
         if not ctx:
@@ -97,11 +109,11 @@ class ModelConfig:
     def init(self):
         self.setup_logging()
         self.load_configs()
-        self.environment = self.get_environment()
         # The graph can define a default runtime but any service in the graph could specify another
         # the idea of what a runtime is belongs to the imported Runtime object of the name referenced
         # by the object (service)
         self.runtime = self.get_runtime()
+        _set_model_config(self)
 
 
 _config = None
@@ -112,3 +124,9 @@ def get_model_config():
     if _config is None:
         _config = ModelConfig()
     return _config
+
+
+def _set_model_config(cfg):
+    global _config
+    _config = cfg
+    return cfg

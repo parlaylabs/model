@@ -11,6 +11,7 @@ from typing import Any, Dict, List
 
 import yaml
 
+from . import config
 from . import entity
 from . import exceptions
 from . import model
@@ -52,8 +53,8 @@ class Segment(model.GraphObj):
         if runtime_name:
             context["runtime"] = store.runtime.get(runtime_name)
         # XXX: need a general solution to this
-        self.pipeline._interpolate_entity(context)
-        context = utils.interpolate(context, context)
+        # self.pipeline._interpolate_entity(context)
+        # context = utils.interpolate(context, context)
         return context
 
 
@@ -87,6 +88,8 @@ class Script(Segment):
             kwargs["timeout"] = timeout
         timeout = kwargs.pop("timeout")
         input = kwargs.pop("input", None)
+        allow_failure = kwargs.pop("allow_failure", False)
+
         try:
             log.debug(f"Run '{cmd}' with {kwargs}\n{input}")
             with subprocess.Popen(
@@ -101,7 +104,7 @@ class Script(Segment):
             ) as proc:
                 out, err = proc.communicate(input, timeout=timeout)
 
-                if proc.returncode != 0:
+                if proc.returncode != 0 and not allow_failure:
                     raise subprocess.CalledProcessError(
                         proc.returncode, cmd, output=out, stderr=err
                     )
@@ -178,6 +181,19 @@ class Eksctl(Script):
     def run(self, store, environment):
         context = self._context(store, environment)
         cmd = self._prepare(f"eksctl {self.command}", context)
+        return self._run(cmd, context)
+
+    def provision(self, store, environment):
+        context = self._context(store, environment)
+        # see if the cluster exists, log and continue
+        config = utils.AttrAccess(yaml.safe_load(open(self.config)))
+        cluster_name = config["metadata"]["name"]
+        result = self._run(f"eksctl get cluster {cluster_name}", allow_failure=True)
+        if result.returncode == 0:
+            # this indicates we already have a cluster of this name
+            log.info(f"EKS cluster {cluster_name} already exists.")
+            return
+        cmd = self._prepare(f"eksctl create cluster -f {self.config}", context)
         return self._run(cmd, context)
 
     def _parse_name(self, name):
@@ -308,9 +324,17 @@ class Pipeline(model.GraphObj):
                 )
             ns = e.get("namespace", "default")
             segment.namespace = ns
-
             instances.append(segment)
         self.segments = instances
+
+    def _interpolate_entities(self):
+        cfg = config.get_model_config()
+        self._interpolate_entity(
+            dict(store=cfg.store, environment=cfg.environment, pipeline=self)
+        )
+        for segment in self.segments:
+            ctx = segment._context(cfg.store, cfg.environment)
+            segment._interpolate_entity(ctx)
 
     def run(self, store, environment, segments=None):
         for segment in self.segments:

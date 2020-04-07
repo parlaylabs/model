@@ -12,7 +12,7 @@ from .. import model, pipeline
 from .. import render as render_impl
 from .. import runtime as runtime_impl
 from .. import schema, server, store, utils
-from ..config import get_model_config
+from ..config import get_model_config, _set_model_config
 from .clicktools import spec, using
 
 cmd_name = __package__.split(".")[0]
@@ -38,25 +38,6 @@ def main(config, **kwargs):
     pass
 
 
-@main.command()
-@using(common_args)
-def init(ctx):
-    print(f"Init {cmd_name}")
-
-
-@main.group()
-@using(common_args)
-def component(ctx):
-    pass
-
-
-@component.command()
-@using(common_args)
-def init(config, src_ref):
-    # XXX: This is just a testing impl, no flexability
-    pass
-
-
 @main.group()
 @using(common_args)
 def pipeline(config, **kwargs):
@@ -75,6 +56,7 @@ def run(config, pipeline_name, segment, **kwargs):
     config.init()
     pipeline = config.store.pipeline.get(pipeline_name)
     pipeline.runtime = config.get_runtime(pipeline.runtime)
+    pipeline._interpolate_entities()
     if not pipeline:
         raise exceptions.ConfigurationError(
             f"unable to find a pipeline {pipeline_name}. Aborting."
