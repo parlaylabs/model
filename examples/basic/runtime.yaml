@@ -1,17 +1,23 @@
 kind: Runtime
 name: kubernetes
 plugins:
-    - name: Docker
-      path: model.runtimes.docker.Docker
-    - name: Kubernetes
-      path: model.runtimes.kubernetes.Kubernetes
-    - name: Istio
-      path: model.runtimes.istio.Istio
-    - name: Kustomize
-      path: model.runtimes.kustomize.Kustomize
+  - name: Vault
+    path: model.runtimes.vault.Vault
+    config:
+      url: https://ssh.staging.fatline.io:8200/
+      verify: false
+      token: "{environment.env['VAULT_TOKEN']}"
+  - name: Docker
+    path: model.runtimes.docker.Docker
+  - name: Kubernetes
+    path: model.runtimes.kubernetes.Kubernetes
+  - name: Istio
+    path: model.runtimes.istio.Istio
+  - name: Kustomize
+    path: model.runtimes.kustomize.Kustomize
 ---
 kind: Runtime
 name: ec2
 plugins:
-    - name: EC2
-      path: model.runtimes.ec2.EC2
+  - name: EC2
+    path: model.runtimes.ec2.EC2

@@ -26,6 +26,7 @@ def register(cls):
 @dataclass
 class RuntimePlugin:
     name: str
+    config: dict = field(init=False, default_factory=utils.AttrAccess)
 
 
 @dataclass(unsafe_hash=True)
@@ -129,14 +130,20 @@ def resolve(runtime_name, store):
         return _runtimes[runtime_name]
     rspec = store.runtime[runtime_name]
     plugins = resolve_plugins(rspec.plugins)
+    for plugin in plugins:
+        m = getattr(plugin, "load", None)
+        if m:
+            m()
     runtime = RuntimeImpl(runtime_name, plugins=plugins)
     _runtimes[runtime_name] = runtime
     store.add(runtime)
+
     return runtime
 
 
 def resolve_plugins(plugins):
     impls = []
+    ctx = config.get_context()
     for p in plugins:
         name = p.get("name", "").lower()
         path = p.get("path")
@@ -152,5 +159,9 @@ def resolve_plugins(plugins):
                 # attempt to load it from the runtimes submodule
                 utils.import_submodules("model.runtimes")
                 plug = _plugins[name]()
+        cfg = p.get("config")
+        if cfg:
+            cfg = utils.interpolate(cfg, ctx)
+            plug.config.update(cfg)
         impls.append(plug)
     return impls

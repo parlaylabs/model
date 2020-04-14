@@ -24,6 +24,7 @@ requests-file = "*"
 boto3 = "*"
 coloredlogs = "*"
 gitignore-parser = "*"
+hvac = {extras = ["parser"],version = "*"}
 
 [requires]
 python_version = "3.7"

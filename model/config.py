@@ -1,4 +1,5 @@
 import logging
+import threading
 
 import click
 import coloredlogs
@@ -14,6 +15,7 @@ class ModelConfig:
     def __init__(self):
         self.store = store.Store()
         self._environment = None
+        self._context = utils.MergingChainMap()
 
     def get_runtime(self, name=None):
         if not self.store:
@@ -115,6 +117,30 @@ class ModelConfig:
         self.runtime = self.get_runtime()
         _set_model_config(self)
 
+    def context(self, **kwargs):
+        ctx = self._get_context()
+        if ctx is None:
+            ctx = self._context
+            ctx["environment"] = self.environment
+            ctx["runtime"] = self.runtime
+
+        return ctx.new_child(kwargs)
+
+    def _get_context(self):
+        tl = threading.local()
+        ctx = getattr(tl, "model_context", None)
+        return ctx
+
+    def set_context(self, ctx=None):
+        tl = threading.local()
+        if ctx is None:
+            try:
+                del tl.model_context
+            except AttributeError:
+                pass
+        else:
+            tl.model_context = ctx
+
 
 _config = None
 
@@ -130,3 +156,14 @@ def _set_model_config(cfg):
     global _config
     _config = cfg
     return cfg
+
+
+def get_context(**kwargs):
+    cfg = get_model_config()
+    ctx = cfg.context(**kwargs)
+    return ctx
+
+
+def set_context(ctx=None):
+    cfg = get_model_config()
+    cfg.set_context(ctx)
