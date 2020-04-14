@@ -1,10 +1,12 @@
 import logging
+import os
 
 from dataclasses import dataclass, field, asdict
 from typing import Any, Dict, List
 
 import jsonmerge
 
+from . import config
 from . import entity
 from . import exceptions
 from . import schema
@@ -67,7 +69,7 @@ class GraphObj:
         self._interpolate_entity()
 
     def _interpolate_entity(self, context=None):
-        if not context: 
+        if not context:
             context = self.context
         data = self.entity.serialized()
         data = utils.interpolate(data, context)
@@ -100,6 +102,10 @@ class Environment(GraphObj):
 
     def __hash__(self):
         return hash((self.name, self.kind))
+
+    @property
+    def env(self):
+        return os.environ
 
 
 @dataclass(unsafe_hash=True)
@@ -304,7 +310,7 @@ class Service(GraphObj):
         # into the endpoint data as a means of setting runtime values
         # TODO: we should be able to reference vault and/or other secret mgmt tools
         # here do reference actual credentials
-        context = dict(service=self, this=self, **env_config)
+        context = config.get_context(service=self, this=self, **env_config)
         context.update(composed)
 
         # XXX: This could filter down to only the connected relation but
@@ -317,6 +323,7 @@ class Service(GraphObj):
             # rename to env
             context["env"] = context["environment"]
         context["environment"] = self.graph.environment
+        config.set_context(context)
         return context, composed
 
     @property
