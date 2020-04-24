@@ -8,12 +8,12 @@ pytest = "*"
 black = "*"
 pytest-watch = "*"
 model = {editable = true,path = "."}
+coverage = "*"
 
 [packages]
 pyyaml = "*"
 jsonschema = "*"
 click = "*"
-graphviz = "*"
 aiohttp = "*"
 jsonmerge = "*"
 jmespath = "*"
@@ -27,7 +27,7 @@ gitignore-parser = "*"
 hvac = {extras = ["parser"],version = "*"}
 
 [requires]
-python_version = "3.7"
+python_version = "3.8"
 
 [pipenv]
 allow_prereleases = true
