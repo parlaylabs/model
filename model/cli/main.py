@@ -5,6 +5,7 @@ import tempfile
 from pathlib import Path
 
 import click
+from rich.traceback import install as install_rich_tb
 
 from .. import entity, exceptions
 from .. import graph as graph_manager
@@ -35,7 +36,7 @@ common_args = [
 @click.group()
 @using(common_args)
 def main(config, **kwargs):
-    pass
+    install_rich_tb()
 
 
 @main.group()

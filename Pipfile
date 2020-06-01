@@ -25,6 +25,7 @@ boto3 = "*"
 coloredlogs = "*"
 gitignore-parser = "*"
 hvac = {extras = ["parser"],version = "*"}
+rich = "*"
 
 [requires]
 python_version = "3.8"
