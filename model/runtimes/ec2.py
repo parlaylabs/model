@@ -27,6 +27,7 @@ class EC2(RuntimePlugin):
         self.eks = boto3.client("eks")
         self.asg = boto3.client("autoscaling")
         self.elb = boto3.client("elb")
+        self.config = {}
 
     def get_instance_by_tags(self, **kwargs):
         flist = [{"Name": f"tag:{k}", "Values": [v]} for k, v in kwargs.items()]

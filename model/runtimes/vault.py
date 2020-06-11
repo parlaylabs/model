@@ -27,7 +27,6 @@ class VaultProxy:
         if not src:
             src = "kv"
         driver = self.src_map[src]
-        breakpoint()
         obj = driver(path)
         return utils.AttrAccess(obj["data"])
 

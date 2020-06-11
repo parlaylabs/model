@@ -147,7 +147,7 @@ def plan(graph_entity, store, environment, runtime=None):
             if not ep:
                 log.warn(f"Unable to find endpoint {epname} for {relation} on {s.name}")
             else:
-                log.debug(f"planned {ep_spec} for {relation} {ep}")
+                # log.debug(f"planned {ep_spec} for {relation} {ep}")
                 ifaces.add(ep.interface.qual_name)
                 endpoints.append(ep)
         if len(ifaces) != 1:
@@ -164,14 +164,29 @@ def plan(graph_entity, store, environment, runtime=None):
     versions = store.get("versions", {}).values()
     for vspec in versions:
         for version in vspec.versions:
-            sname = version["name"]
-            image = version["image"]
-            service = store.service.get(sname)
-            if not service:
+            # Support replacing version in Component or Service
+            # Apply component matches, then service matches so they override
+            # FIXME: until the compositor branch lands setting service is broken
+            # this calls add_facet which service delegates to its component entity today
+            # and thus overrides all shared services derving from this.
+            # To reflect this current limitation the default is component,
+            # however in the future the version override target should default to service
+            spec = version["name"]
+            kind, _, name = spec.rpartition(":")
+            if not kind:
+                kind = "component"
+            kind = kind.lower()
+            if kind not in ["component", "service"]:
                 raise exceptions.ConfigurationError(
-                    f"Versions file references service {sname} which isn't in graph"
+                    f"Attempting to override version of kind {kind}."
                 )
-            service.add_facet({"image": image}, vspec.src_ref[0])
+            image = version["image"]
+            obj = store.get(kind).get(name)
+            if not obj:
+                raise exceptions.ConfigurationError(
+                    f"Versions file references {kind} {name} which isn't in graph"
+                )
+            obj.add_facet({"image": image}, vspec.src_ref[0])
     # Now ger or create an updated versions document
     version = entity.Entity(dict(name="versions", kind="Versions"))
     versions = []
