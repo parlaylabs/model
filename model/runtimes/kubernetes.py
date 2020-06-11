@@ -267,6 +267,46 @@ class Kubernetes(RuntimePlugin):
             },
         }
 
+        networkType = service.config.get("networkType", "model/cni")
+        if networkType == "model/host":
+            container_spec["template"]["spec"].update(
+                {
+                    "hostNetwork": True,
+                    "dnsPolicy": "ClusterFirstWithHostNet",
+                    "nodeSelector": {"model/networkType": "host"},
+                    # We taint nodes having host networking
+                    # We have to tolerate that here
+                    "tolerations": [
+                        {
+                            "key": "hostNetworking",
+                            "operator": "Equal",
+                            "value": "true",
+                            "effect": "NoSchedule",
+                        }
+                    ],
+                    # For things with host networking we want anti-affinity to pods of the same type
+                    # which would by default bind the same host port ranges
+                    "affinity": {
+                        "podAntiAffinity": {
+                            "requiredDuringSchedulingIgnoredDuringExecution": [
+                                {
+                                    "labelSelector": {
+                                        "matchExpressions": [
+                                            {
+                                                "key": "app.kubernetes.io/name",
+                                                "operator": "In",
+                                                "values": [service.name],
+                                            }
+                                        ]
+                                    },
+                                    "topologyKey": "kubernetes.io/hostname",
+                                }
+                            ]
+                        }
+                    },
+                },
+            )
+
         self.add_image_pull_secret(graph, service, output, container_spec)
 
         deployment = {
