@@ -1,8 +1,10 @@
 import logging
 import threading
+from pathlib import Path
 
 import click
 import coloredlogs
+import yaml
 
 from . import runtime as runtime_impl
 from . import schema, server, store, utils
@@ -101,10 +103,32 @@ class ModelConfig:
         logging.getLogger("botocore").setLevel(logging.WARNING)
         logging.getLogger("urllib3").setLevel(logging.WARNING)
 
+    def parse_model_config(self, pathname: Path):
+        conf = {}
+        if not pathname.exists:
+            return conf
+        text = pathname.read_text(encoding="utf-8")
+        conf = yaml.safe_load(text)
+        return conf
+
     def load_configs(self):
         cd = self.find("config_dir")
         if not cd:
             return
+        cd = list(cd)
+
+        # see if there is  [~/.model.conf', '.model.conf']
+        paths = filter(
+            lambda p: p.exists(),
+            [Path("~/.model.conf").expanduser(), Path(".model.conf")],
+        )
+        for p in paths:
+            conf = self.parse_model_config(p)
+            bases = conf.get("bases")
+            if bases:
+                for b in reversed(bases):
+                    cd.insert(0, b)
+
         for d in cd:
             schema.load_config(self.store, d)
 
