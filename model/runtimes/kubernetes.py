@@ -200,6 +200,49 @@ class Kubernetes(RuntimePlugin):
                     pull_secret.key, sec, self, service=service, graph=graph,
                 )
 
+    def add_probes_from_endpoints(self, service, container_spec):
+        epspecs = service.entity.get("endpoints")
+        for ep in service.endpoints.values():
+            epspec = utils.pick(epspecs, name=ep.name)
+            breakpoint()
+
+            if not epspec:
+                continue
+            probes = epspec.get("probes")
+            if not probes:
+                continue
+
+            for probe in probes:
+                kind = probe.get("kind")
+                probeKey = f"{kind}Probe"
+                startup = probe.get("startup")
+                path = probe.get("path")
+                command = probe.get("command")
+                period = probe.get("periodSeconds", 10)
+                initialDelaySeconds = probe.get("initialDelaySeconds", 20)
+                failureThreshold = probe.get("failureThreshold", 30)
+                payload = {}
+                if initialDelaySeconds:
+                    payload["initialDelaySeconds"] = initialDelaySeconds
+                payload["failureThreshold"] = failureThreshold
+                payload["periodSeconds"] = period
+                result = {probeKey: payload}
+                breakpoint()
+                if ep.interface.isA("http", "server"):
+                    payload["httpGet"] = {
+                        "path": path,
+                        # FIXME: again with the [0]
+                        "port": ep.ports[0].port,
+                    }
+                elif ep.ports[0].protocol == "TCP":
+                    payload["tcpSocket"] = {"port": ep.ports[0].port}
+                else:
+                    payload["exec"] = {"command": list(command)}
+
+                if startup:
+                    result["startupProbe"] = payload
+                container_spec.update(result)
+
     def render_service(self, service, graph, output):
         labels = {
             "app.kubernetes.io/name": service.name,
@@ -266,6 +309,8 @@ class Kubernetes(RuntimePlugin):
                 },
             },
         }
+        # Look at the endpoints and see if we need to add any probes
+        self.add_probes_from_endpoints(service, container_spec)
 
         networkType = service.config.get("networkType", "model/cni")
         if networkType == "model/host":

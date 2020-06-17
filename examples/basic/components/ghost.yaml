@@ -23,3 +23,13 @@ endpoints:
     interface: http:server
     data:
       port: "2368"
+    probes:
+      - kind: readiness
+        path: /healthz
+        startup: true
+        failureThreshold: 30
+        periodSeconds: 10
+      - kind: liveness
+        path: /healthz
+        failureThreshold: 30
+        periodSeconds: 10

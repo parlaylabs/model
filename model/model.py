@@ -350,6 +350,8 @@ class Service(GraphObj):
         return template.render(self.context)
 
 
+# TODO: allow interfaces to 'subclass' other othefaces
+# the isA() method should check the chain
 @dataclass
 class Interface(GraphObj):
     name: str
@@ -364,6 +366,14 @@ class Interface(GraphObj):
 
     def __hash__(self):
         return hash((self.name, self.kind, self.version))
+
+    def isA(self, name, role=None):
+        # XXX: see notes above on subclassing, for now
+        n = name == self.name
+        r = True
+        if role is not None:
+            r = utils.pick(self.roles, name=role)
+        return n and bool(r)
 
     def serialized(self):
         return dict(
