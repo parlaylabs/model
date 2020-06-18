@@ -170,6 +170,124 @@ class Kubernetes(RuntimePlugin):
             )
         return volumeMounts, volumes
 
+    def add_storage_class(self, graph, output, name, kind="ebs"):
+        data = {
+            "kind": "StorageClass",
+            "apiVersion": "storage.k8s.io/v1",
+            "metadata": {
+                "name": name,
+                "namespace": graph.name,
+                "provisioner": f"{kind}.csi.aws.com",
+                "volumeBindingMode": "WaitForFirstConsumer",
+            },
+        }
+        output.add(
+            f"10-{name}-storageclass.yaml",
+            data,
+            self,
+            graph=graph,
+            ignore_existing=True,
+        )
+        return data
+
+    def add_pvc(
+        self,
+        graph,
+        service,
+        claimName,
+        mountPath,
+        capacity,
+        accessMode,
+        container_spec,
+        output,
+        labels=None,
+    ):
+        # There are two components to a PVC
+        # the path mapping in mounts
+        # and the claim ref in volumes
+        # FIXME: [0] is an ok default but we'd want a way to check these by id
+        spec = container_spec["template"]["spec"]
+        container = spec["containers"][0]
+        mounts = container["volumeMounts"]
+        pvm = dict(name=claimName, mountPath=mountPath)
+        mounts.append(pvm)
+        pvc = {"name": claimName, "persistentVolumeClaim": {"claimName": claimName,}}
+        spec.setdefault("volumes", []).append(pvc)
+
+        claim = {
+            "apiVersion": "v1",
+            "kind": "PersistentVolumeClaim",
+            "metadata": {"name": claimName, "namespace": graph.name},
+            "spec": {
+                "accessModes": [accessMode],
+                "storageClassName": claimName,
+                "resources": {"requests": {"storage": capacity}},
+            },
+        }
+        if labels:
+            filtered = labels.copy()
+            for k in labels:
+                if k not in ["app.kubernetes.io/name", "app.kubernetes.io/part-of"]:
+                    del filtered[k]
+            claim["spec"]["selector"] = {"matchLabels": filtered}
+
+        output.add(
+            f"20-{claimName}-pvc.yaml",
+            claim,
+            self,
+            service=service,
+            graph=graph,
+            allow_existing=True,
+        )
+
+    def assign_storage_claims(
+        self, graph, service, output, container_spec, labels=None
+    ):
+        # see if there are volume claims
+        # XXX: this should be an init() thing, not called by service, but...
+        s_classes = {}
+        storage_specs = graph.environment.config.get("storage")
+
+        def _normalize_name(graph, service, n):
+            return f"{graph.name}-{service.name}-{n}"
+
+        if storage_specs:
+            for s in storage_specs:
+                name = _normalize_name(graph, service, s["name"])
+                kind = s.get("kind", "ebs")
+                if kind not in ["ebs", "efs"]:
+                    raise exceptions.ConfigurationError(f"unknown storage class {kind}")
+                capacity = s.get("storage")
+                accessMode = s.get("accessMode", "readWriteOnce")
+                # XXX: only do this if the service defines storage needs
+                s_classes[name] = (kind, capacity, accessMode)
+        #
+        #  Now assuming there is a matching storage class for any given type
+        # we can add a pvc and the needed volume mounts
+        entity_storage = service.entity.get("storage")
+        if not entity_storage:
+            return
+        for s in entity_storage:
+            name = _normalize_name(graph, service, s.get("name"))
+            path = s.get("path")
+            if name not in s_classes:
+                raise exceptions.ConfigurationError(
+                    f"storage class '{name}' not defined in environment.storage"
+                )
+            kind, capacity, accessMode = s_classes[name]
+            self.add_storage_class(graph, output, name, kind)
+            self.add_pvc(
+                graph,
+                service,
+                name,
+                path,
+                capacity,
+                accessMode,
+                container_spec,
+                output=output,
+                labels=labels,
+            )
+
     def add_image_pull_secret(self, graph, service, output, container_spec):
         # see if we need ImagePullSecrets based on defaultContainer
         default_container = container_spec["template"]["spec"]["containers"][0]
@@ -204,8 +322,6 @@ class Kubernetes(RuntimePlugin):
         epspecs = service.entity.get("endpoints")
         for ep in service.endpoints.values():
             epspec = utils.pick(epspecs, name=ep.name)
-            breakpoint()
-
             if not epspec:
                 continue
             probes = epspec.get("probes")
@@ -227,7 +343,6 @@ class Kubernetes(RuntimePlugin):
                 payload["failureThreshold"] = failureThreshold
                 payload["periodSeconds"] = period
                 result = {probeKey: payload}
-                breakpoint()
                 if ep.interface.isA("http", "server"):
                     payload["httpGet"] = {
                         "path": path,
@@ -242,6 +357,47 @@ class Kubernetes(RuntimePlugin):
                 if startup:
                     result["startupProbe"] = payload
                 container_spec.update(result)
+
+    def assign_host_networking(self, service, container_spec):
+        networkType = service.config.get("networkType", "model/cni")
+        if networkType == "model/host":
+            container_spec["template"]["spec"].update(
+                {
+                    "hostNetwork": True,
+                    "dnsPolicy": "ClusterFirstWithHostNet",
+                    "nodeSelector": {"model/networkType": "host"},
+                    # We taint nodes having host networking
+                    # We have to tolerate that here
+                    "tolerations": [
+                        {
+                            "key": "hostNetworking",
+                            "operator": "Equal",
+                            "value": "true",
+                            "effect": "NoSchedule",
+                        }
+                    ],
+                    # For things with host networking we want anti-affinity to pods of the same type
+                    # which would by default bind the same host port ranges
+                    "affinity": {
+                        "podAntiAffinity": {
+                            "requiredDuringSchedulingIgnoredDuringExecution": [
+                                {
+                                    "labelSelector": {
+                                        "matchExpressions": [
+                                            {
+                                                "key": "app.kubernetes.io/name",
+                                                "operator": "In",
+                                                "values": [service.name],
+                                            }
+                                        ]
+                                    },
+                                    "topologyKey": "kubernetes.io/hostname",
+                                }
+                            ]
+                        }
+                    },
+                },
+            )
 
     def render_service(self, service, graph, output):
         labels = {
@@ -311,48 +467,11 @@ class Kubernetes(RuntimePlugin):
         }
         # Look at the endpoints and see if we need to add any probes
         self.add_probes_from_endpoints(service, container_spec)
-
-        networkType = service.config.get("networkType", "model/cni")
-        if networkType == "model/host":
-            container_spec["template"]["spec"].update(
-                {
-                    "hostNetwork": True,
-                    "dnsPolicy": "ClusterFirstWithHostNet",
-                    "nodeSelector": {"model/networkType": "host"},
-                    # We taint nodes having host networking
-                    # We have to tolerate that here
-                    "tolerations": [
-                        {
-                            "key": "hostNetworking",
-                            "operator": "Equal",
-                            "value": "true",
-                            "effect": "NoSchedule",
-                        }
-                    ],
-                    # For things with host networking we want anti-affinity to pods of the same type
-                    # which would by default bind the same host port ranges
-                    "affinity": {
-                        "podAntiAffinity": {
-                            "requiredDuringSchedulingIgnoredDuringExecution": [
-                                {
-                                    "labelSelector": {
-                                        "matchExpressions": [
-                                            {
-                                                "key": "app.kubernetes.io/name",
-                                                "operator": "In",
-                                                "values": [service.name],
-                                            }
-                                        ]
-                                    },
-                                    "topologyKey": "kubernetes.io/hostname",
-                                }
-                            ]
-                        }
-                    },
-                },
-            )
-
         self.add_image_pull_secret(graph, service, output, container_spec)
+        self.assign_host_networking(service, container_spec)
+        self.assign_storage_claims(
+            graph, service, output, container_spec, labels=labels
+        )
 
         deployment = {
             "apiVersion": "apps/v1",

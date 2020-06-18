@@ -5,3 +5,9 @@ version: "1"
 endpoints:
   - name: db
     interface: mysql:server
+storage:
+  - name: stable
+    path: /var/lib/mysql
+    # automatically match labels to the service instance
+    # automatically add it as a volume
+    # storageClassName can be used

@@ -27,3 +27,11 @@ config:
       environment:
         - name: MYSQL_ROOT_PASSWORD
           value: "{db_local.provided_secrets.admin_password}"
+  storage:
+    # allocate persistent volumes to the environment
+    # tag them with storageclass, env name
+    # and other things used in volume claims matching (see mysql)
+    - kind: ebs # | efs # default ebs -- efs supports writemany
+      name: stable # this is the storageClass but the key into volume names in component.storage[]
+      storage: 100Gi
+      accessMode: readWriteOnce # default
