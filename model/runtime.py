@@ -1,6 +1,7 @@
 import base64
 import itertools
 import json
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List
@@ -13,6 +14,7 @@ from . import exceptions
 from . import render
 from . import utils
 
+log = logging.getLogger(__name__)
 _marker = object()
 _plugins = {}
 _runtimes = {}
@@ -38,6 +40,11 @@ class RuntimeImpl:
     def __post_init__(self):
         for p in self.plugins:
             setattr(p, "runtime_impl", self)
+
+    def serialized(self):
+        return dict(
+            name=self.name, kind=self.kind, plugins=[p.name for p in self.plugins]
+        )
 
     def plugin(self, key):
         return utils.pick(self.plugins, name=key)
@@ -145,15 +152,18 @@ def resolve_plugins(plugins):
     impls = []
     ctx = config.get_context()
     for p in plugins:
+        plug = None
         name = p.get("name", "").lower()
         path = p.get("path")
         package = p.get("package")
         if path:
+            log.debug(f"loading plugin {name}::{path}")
             cls = utils.import_object(path, package=package)
             plug = cls()
             if not name:
                 name = plug.__class__.__name__.lower()
-            _plugins[name] = cls
+            _plugins[name] = plug
+            log.debug(f"loaded plugin {name}::{plug}")
         else:
             if name not in _plugins:
                 # attempt to load it from the runtimes submodule
@@ -163,5 +173,7 @@ def resolve_plugins(plugins):
         if cfg:
             cfg = utils.interpolate(cfg, ctx)
             plug.config.update(cfg)
+        if plug is None:
+            raise exceptions.ConfigurationError(f"Unable to resolve {p}")
         impls.append(plug)
     return impls

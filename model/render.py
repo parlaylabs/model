@@ -40,19 +40,38 @@ class Output:
     data: Dict[str, Any]
     annotations: Dict[str, Any]
 
+    @property
+    def plugins(self):
+        d = {}
+        plugins = self.annotations.get("plugin", [])
+        for p in plugins:
+            d[p.name] = p
+        return d
+
     def update(self, data, schema=None):
         if not schema:
             schema = {}
         utils.merge_paths(self, data, schema=schema)
 
+    def get_primary_object(self):
+        for kind in ["service", "relation"]:
+            v = self.annotations.get(kind)
+            if v:
+                return v
+        return None
 
-def _match_plugin(item, query):
+
+def match_plugin(item, query):
     plugins = item.annotations.get("plugin", None)
     plugin = query["plugin"]
-    if isinstance(plugins, list):
-        return any([(plugin == p) for p in plugins])
+    if isinstance(plugin, str):
+        getter = lambda p: p.name
     else:
-        return plugin == plugins
+        getter = lambda p: p
+    if isinstance(plugins, list):
+        return any([plugin == getter(p) for p in plugins])
+    else:
+        return plugin == getter(plugins)
     return False
 
 
@@ -96,7 +115,7 @@ class Renderer(list):
     def pick(self, **kwargs):
         plugin = kwargs.get("plugin")
         if plugin:
-            kwargs["predicate"] = functools.partial(_match_plugin, query=plugin)
+            kwargs["predicate"] = functools.partial(match_plugin, query=plugin)
         return utils.filter_iter(self, **kwargs)
 
     def filter(self, **kwargs):

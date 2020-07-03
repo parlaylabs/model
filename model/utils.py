@@ -270,6 +270,13 @@ class MergingChainMap(dict):
 def prop_get(obj, path, default=None, sep="."):
     if not path:
         return obj
+    try:
+        if sep in path:
+            # test for dotted keys that are data
+            if path in obj:
+                return obj[path]
+    except (TypeError, KeyError):
+        pass
     o = obj
     for part in path.split(sep):
         try:
@@ -292,11 +299,16 @@ def filter_select(item, query):
     return True
 
 
-def filter_iter(lst, query=None, reversed=False, predicate=filter_select, **kwargs):
+def filter_callables(item, query):
+    return all(p(item) for p in query)
+
+
+def filter_iter(
+    lst, query=None, reversed=False, predicate=filter_select, selector=filter, **kwargs
+):
     if not query:
         query = {}
         query.update(kwargs)
-    selector = filter
     if reversed:
         selector = itertools.filterfalse
     predicate = functools.partial(predicate, query=query)

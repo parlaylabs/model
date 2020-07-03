@@ -77,6 +77,17 @@ class Kubernetes(RuntimePlugin):
         )
         return f"{service.name}-secrets", bool(data)
 
+    def add_volume(self, container_spec, name, kind, config=None):
+        volumes = container_spec.setdefault("volumes", [])
+        if not config:
+            config = {}
+        volume = {"name": name, kind: config}
+        volumes.append(volume)
+
+    def mountVolume(self, container, name, path):
+        mounts = container.setdefault("volumeMounts", [])
+        mounts.append(dict(mountPath=path, name=name))
+
     def add_volumes(self, graph, service, output, configmap_name, secrets_name=None):
         volumeMounts = [
             {"name": "model", "mountPath": "/etc/model/", "readOnly": True,}
@@ -359,8 +370,10 @@ class Kubernetes(RuntimePlugin):
                 container_spec.update(result)
 
     def assign_host_networking(self, service, container_spec):
-        networkType = service.config.get("networkType", "model/cni")
-        if networkType == "model/host":
+        labels = {}
+        networkType = service.config.get("networkType", "cni")
+        if networkType == "host":
+            labels.update({"model/networkType": "host"})
             container_spec["template"]["spec"].update(
                 {
                     "hostNetwork": True,
@@ -398,6 +411,22 @@ class Kubernetes(RuntimePlugin):
                     },
                 },
             )
+        return labels
+
+    def create_init_container(self, name, image, args=None, command=None):
+        container = {
+            "name": name,
+            "image": image,
+        }
+        if command:
+            container["command"] = command
+        if args:
+            container["args"] = args
+        return container
+
+    def add_init_container(self, container_spec, init_container):
+        initContainers = container_spec.setdefault("initContainers", [])
+        initContainers.append(init_container)
 
     def render_service(self, service, graph, output):
         labels = {
@@ -468,7 +497,11 @@ class Kubernetes(RuntimePlugin):
         # Look at the endpoints and see if we need to add any probes
         self.add_probes_from_endpoints(service, container_spec)
         self.add_image_pull_secret(graph, service, output, container_spec)
-        self.assign_host_networking(service, container_spec)
+        nw_labels = self.assign_host_networking(service, container_spec)
+        if nw_labels:
+            labels.update(nw_labels)
+            pod_labels.update(nw_labels)
+
         self.assign_storage_claims(
             graph, service, output, container_spec, labels=labels
         )

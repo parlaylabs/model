@@ -76,6 +76,18 @@ class GraphObj:
         self.entity.add_facet(data, "<interpolated>")
 
 
+class FeatureMixin:
+    @property
+    def feature(self):
+        # XXX: check if the feature was loaded
+        return dict([(f["name"], f) for f in self.features])
+
+
+@dataclass
+class Featured(GraphObj):
+    features: List[Dict[str, Any]] = field(default_factory=list)
+
+
 @dataclass
 class Runtime(GraphObj):
     kind: str = field(init=False, default="Runtime")
@@ -117,13 +129,13 @@ class Component(GraphObj):
 
 
 @dataclass
-class Service(GraphObj):
+class Service(Featured, FeatureMixin):
     kind: str = field(init=False, hash=True, default="Service")
     endpoints: Dict[str, "Endpoint"] = field(
         init=False, default_factory=utils.AttrAccess
     )
     relations: List = field(init=False, default_factory=list)
-    runtime: Runtime
+    runtime: Runtime = field(default=None)
     # TODO: this can be in init and draw config from the graph
     config: Dict[str, Any] = field(default_factory=dict)
 
@@ -536,9 +548,10 @@ class Endpoint:
 
 
 @dataclass
-class Relation:
+class Relation(FeatureMixin):
     kind: str = field(init=False, default="Relation")
     endpoints: List[Endpoint] = field(default_factory=list)
+    features: List[Dict[str, Any]] = field(default_factory=list)
 
     def __hash__(self):
         return hash((self.name, self.kind))
